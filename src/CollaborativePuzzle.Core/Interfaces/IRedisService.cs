@@ -44,6 +44,35 @@ namespace CollaborativePuzzle.Core.Interfaces
         Task<T?> GetObjectAsync<T>(string key);
         
         /// <summary>
+        /// Gets a value from Redis (generic version)
+        /// </summary>
+        /// <typeparam name="T">Type of value to retrieve</typeparam>
+        /// <param name="key">Cache key</param>
+        /// <returns>Value or default if not found</returns>
+        Task<T?> GetAsync<T>(string key) where T : class;
+        
+        /// <summary>
+        /// Sets a value in Redis with optional expiration
+        /// </summary>
+        /// <typeparam name="T">Type of value to store</typeparam>
+        /// <param name="key">Cache key</param>
+        /// <param name="value">Value to store</param>
+        /// <param name="expiry">Optional expiration time</param>
+        /// <returns>True if operation was successful</returns>
+        Task<bool> SetAsync<T>(string key, T value, TimeSpan? expiry = null) where T : class;
+        
+        /// <summary>
+        /// Sets a value in Redis with conditional operation
+        /// </summary>
+        /// <typeparam name="T">Type of value to store</typeparam>
+        /// <param name="key">Cache key</param>
+        /// <param name="value">Value to store</param>
+        /// <param name="expiry">Expiration time</param>
+        /// <param name="when">Condition for the operation</param>
+        /// <returns>True if operation was successful</returns>
+        Task<bool> SetAsync<T>(string key, T value, TimeSpan expiry, When when) where T : class;
+        
+        /// <summary>
         /// Deletes a key from Redis
         /// </summary>
         /// <param name="key">Cache key to delete</param>
@@ -72,5 +101,14 @@ namespace CollaborativePuzzle.Core.Interfaces
         /// <param name="message">Message to publish</param>
         /// <returns>Number of subscribers that received the message</returns>
         Task<long> PublishAsync(string channel, string message);
+        
+        /// <summary>
+        /// Publishes an object to a Redis channel
+        /// </summary>
+        /// <typeparam name="T">Type of object to publish</typeparam>
+        /// <param name="channel">Channel name</param>
+        /// <param name="message">Object to publish</param>
+        /// <returns>Task representing the operation</returns>
+        Task PublishAsync<T>(string channel, T message) where T : class;
     }
 }

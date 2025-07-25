@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using CollaborativePuzzle.Core.Entities;
 using CollaborativePuzzle.Core.Models;
+using CollaborativePuzzle.Core.Enums;
 
 namespace CollaborativePuzzle.Core.Interfaces
 {
@@ -20,6 +21,13 @@ namespace CollaborativePuzzle.Core.Interfaces
         
         /// <summary>
         /// Retrieves a session by its unique identifier
+        /// </summary>
+        /// <param name="sessionId">Session identifier</param>
+        /// <returns>Session entity or null if not found</returns>
+        Task<PuzzleSession?> GetSessionAsync(Guid sessionId);
+        
+        /// <summary>
+        /// Retrieves a session by its unique identifier (legacy name support)
         /// </summary>
         /// <param name="sessionId">Session identifier</param>
         /// <returns>Session entity or null if not found</returns>
@@ -76,5 +84,54 @@ namespace CollaborativePuzzle.Core.Interfaces
         /// <param name="sessionId">Session identifier</param>
         /// <returns>True if deletion was successful</returns>
         Task<bool> DeleteSessionAsync(Guid sessionId);
+        
+        /// <summary>
+        /// Adds a participant to a session
+        /// </summary>
+        /// <param name="sessionId">Session identifier</param>
+        /// <param name="userId">User identifier</param>
+        /// <param name="connectionId">SignalR connection ID</param>
+        /// <returns>Created participant entity</returns>
+        Task<SessionParticipant> AddParticipantAsync(Guid sessionId, Guid userId, string? connectionId = null);
+        
+        /// <summary>
+        /// Removes a participant from a session
+        /// </summary>
+        /// <param name="sessionId">Session identifier</param>
+        /// <param name="userId">User identifier</param>
+        /// <returns>True if removal was successful</returns>
+        Task<bool> RemoveParticipantAsync(Guid sessionId, Guid userId);
+        
+        /// <summary>
+        /// Gets a specific participant in a session
+        /// </summary>
+        /// <param name="sessionId">Session identifier</param>
+        /// <param name="userId">User identifier</param>
+        /// <returns>Participant entity or null if not found</returns>
+        Task<SessionParticipant?> GetParticipantAsync(Guid sessionId, Guid userId);
+        
+        /// <summary>
+        /// Gets all participants in a session
+        /// </summary>
+        /// <param name="sessionId">Session identifier</param>
+        /// <returns>List of session participants</returns>
+        Task<IEnumerable<SessionParticipant>> GetSessionParticipantsAsync(Guid sessionId);
+        
+        /// <summary>
+        /// Saves a chat message to the session
+        /// </summary>
+        /// <param name="sessionId">Session identifier</param>
+        /// <param name="userId">User identifier who sent the message</param>
+        /// <param name="message">Message content</param>
+        /// <param name="messageType">Type of message</param>
+        /// <returns>Created chat message entity</returns>
+        Task<ChatMessage> SaveChatMessageAsync(Guid sessionId, Guid userId, string message, MessageType messageType);
+        
+        /// <summary>
+        /// Marks a session as completed
+        /// </summary>
+        /// <param name="sessionId">Session identifier</param>
+        /// <returns>True if completion was successful</returns>
+        Task<bool> CompleteSessionAsync(Guid sessionId);
     }
 }

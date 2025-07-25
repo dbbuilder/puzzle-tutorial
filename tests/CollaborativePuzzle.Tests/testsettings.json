@@ -1,0 +1,20 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug",
+      "Microsoft": "Warning",
+      "Microsoft.EntityFrameworkCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "TestContainerProvided",
+    "Redis": "TestContainerProvided"
+  },
+  "TestSettings": {
+    "UseTestContainers": true,
+    "SqlServerImage": "mcr.microsoft.com/mssql/server:2022-latest",
+    "RedisImage": "redis:7-alpine",
+    "TestTimeout": "00:00:30",
+    "EnableDetailedLogging": true
+  }
+}

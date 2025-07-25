@@ -1,542 +1,633 @@
+using System;
+using System.Threading.Tasks;
+using System.Threading.Channels;
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
-using System.Security.Claims;
 using CollaborativePuzzle.Core.Interfaces;
 using CollaborativePuzzle.Core.Models;
-using CollaborativePuzzle.Core.Entities;
-using System.Text.Json;
+using CollaborativePuzzle.Core.Enums;
 
 namespace CollaborativePuzzle.Hubs
 {
     /// <summary>
-    /// SignalR Hub for real-time puzzle collaboration
-    /// Handles piece movements, user presence, and chat messages
+    /// SignalR hub for real-time puzzle collaboration with Redis backplane support.
+    /// Handles piece movements, locking, chat, and session management.
     /// </summary>
     [Authorize]
     public class PuzzleHub : Hub
     {
-        private readonly ILogger<PuzzleHub> _logger;
-        private readonly IPieceRepository _pieceRepository;
         private readonly ISessionRepository _sessionRepository;
+        private readonly IPieceRepository _pieceRepository;
         private readonly IRedisService _redisService;
+        private readonly ILogger<PuzzleHub> _logger;
         
-        // Connection tracking for session management
-        private static readonly Dictionary<string, string> _connectionSessions = new();
-        private static readonly Dictionary<string, Guid> _connectionUsers = new();
+        // Throttling for cursor updates - limit to 10 updates per second per user
+        private static readonly ConcurrentDictionary<string, Channel<CursorUpdateNotification>> _cursorChannels = new();
+        private static readonly TimeSpan CursorThrottleInterval = TimeSpan.FromMilliseconds(100);
+        private static readonly TimeSpan PieceLockDuration = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan ConnectionTrackingExpiry = TimeSpan.FromMinutes(30);
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PuzzleHub"/> class.
+        /// </summary>
         public PuzzleHub(
-            ILogger<PuzzleHub> logger,
-            IPieceRepository pieceRepository,
             ISessionRepository sessionRepository,
-            IRedisService redisService)
+            IPieceRepository pieceRepository,
+            IRedisService redisService,
+            ILogger<PuzzleHub> logger)
         {
-            _logger = logger;
-            _pieceRepository = pieceRepository;
-            _sessionRepository = sessionRepository;
-            _redisService = redisService;
+            _sessionRepository = sessionRepository ?? throw new ArgumentNullException(nameof(sessionRepository));
+            _pieceRepository = pieceRepository ?? throw new ArgumentNullException(nameof(pieceRepository));
+            _redisService = redisService ?? throw new ArgumentNullException(nameof(redisService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        #region Connection Management
-
+        /// <summary>
+        /// Called when a new connection is established.
+        /// </summary>
         public override async Task OnConnectedAsync()
         {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var connectionId = Context.ConnectionId;
-
-                _logger.LogInformation("User {UserId} connected with connection {ConnectionId}", userId, connectionId);
-
-                // Track connection
-                _connectionUsers[connectionId] = userId;
-
-                // Update user's last active time in cache
-                await _redisService.SetStringAsync($"user:lastseen:{userId}", DateTimeOffset.UtcNow.ToString(), TimeSpan.FromHours(24));
-
-                await base.OnConnectedAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during connection establishment for {ConnectionId}", Context.ConnectionId);
-                throw;
-            }
+            _logger.LogInformation("User {UserId} connected with connection {ConnectionId}", 
+                Context.UserIdentifier, Context.ConnectionId);
+            
+            await base.OnConnectedAsync();
         }
 
+        /// <summary>
+        /// Called when a connection is terminated.
+        /// </summary>
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
+            _logger.LogInformation("User {UserId} disconnected from connection {ConnectionId}", 
+                Context.UserIdentifier, Context.ConnectionId);
+            
             try
             {
-                var connectionId = Context.ConnectionId;
-                var userId = GetCurrentUserId();
-
-                _logger.LogInformation("User {UserId} disconnected from connection {ConnectionId}", userId, connectionId);
-
-                // Handle disconnection cleanup
-                if (_connectionSessions.TryGetValue(connectionId, out var sessionId))
+                // Get session info from Redis
+                var sessionId = await _redisService.GetAsync<string>($"connection:{Context.ConnectionId}:session");
+                if (!string.IsNullOrEmpty(sessionId) && Guid.TryParse(sessionId, out var sessionGuid))
                 {
-                    await HandleUserDisconnection(sessionId, userId, connectionId);
+                    var userId = Guid.Parse(Context.UserIdentifier!);
+                    
+                    // Remove from session
+                    await _sessionRepository.RemoveParticipantAsync(sessionGuid, userId);
+                    
+                    // Unlock all pieces held by this user
+                    await _pieceRepository.UnlockAllPiecesForUserAsync(userId);
+                    
+                    // Notify others in the session
+                    await Clients.OthersInGroup($"puzzle-{sessionId}").SendAsync("UserLeft", 
+                        new UserLeftNotification
+                        {
+                            UserId = Context.UserIdentifier!,
+                            SessionId = sessionId,
+                            LeftAt = DateTime.UtcNow
+                        });
                 }
-
-                // Clean up tracking dictionaries
-                _connectionSessions.Remove(connectionId);
-                _connectionUsers.Remove(connectionId);
-
-                // Release any locked pieces by this user
-                await _pieceRepository.UnlockAllPiecesByUserAsync(userId);
-
-                if (exception != null)
+                
+                // Clean up Redis tracking
+                await _redisService.DeleteAsync($"connection:{Context.ConnectionId}");
+                await _redisService.DeleteAsync($"user:{Context.UserIdentifier}:session");
+                
+                // Clean up cursor channel
+                if (_cursorChannels.TryRemove(Context.ConnectionId, out var channel))
                 {
-                    _logger.LogWarning(exception, "User {UserId} disconnected due to exception", userId);
+                    channel.Writer.TryComplete();
                 }
-
-                await base.OnDisconnectedAsync(exception);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during disconnection handling for {ConnectionId}", Context.ConnectionId);
+                _logger.LogError(ex, "Error during disconnect cleanup for user {UserId}", Context.UserIdentifier);
             }
+            
+            await base.OnDisconnectedAsync(exception);
         }
 
-        #endregion
-
-        #region Session Management
-
         /// <summary>
-        /// Join a puzzle session for collaborative solving
+        /// Joins a puzzle session.
         /// </summary>
-        /// <param name="sessionId">Session identifier to join</param>
-        public async Task JoinPuzzleSession(string sessionId)
+        /// <param name="sessionId">The session ID to join.</param>
+        /// <returns>The join result with session state.</returns>
+        public async Task<JoinSessionResult> JoinPuzzleSession(string sessionId)
         {
             try
             {
-                var userId = GetCurrentUserId();
-                var connectionId = Context.ConnectionId;
-
-                _logger.LogInformation("User {UserId} attempting to join session {SessionId}", userId, sessionId);
-
                 if (!Guid.TryParse(sessionId, out var sessionGuid))
                 {
-                    await Clients.Caller.SendAsync("Error", "Invalid session ID format");
-                    return;
+                    return HubResult.CreateError<JoinSessionResult>("Invalid session ID format");
                 }
-
-                // Verify session exists and is active
-                var session = await _sessionRepository.GetSessionWithParticipantsAsync(sessionGuid);
-                if (session == null || session.Status != Core.Enums.SessionStatus.Active)
-                {
-                    await Clients.Caller.SendAsync("Error", "Session not found or not active");
-                    return;
-                }
-
-                // Check if session is full
-                if (session.Participants.Count(p => p.Status == Core.Enums.ParticipantStatus.Online) >= session.MaxParticipants)
-                {
-                    await Clients.Caller.SendAsync("Error", "Session is full");
-                    return;
-                }
-
-                // Join SignalR group
-                await Groups.AddToGroupAsync(connectionId, $"session_{sessionId}");
-
-                // Track connection to session
-                _connectionSessions[connectionId] = sessionId;
-
-                // Update participant status in database via stored procedure
-                // This would call a stored procedure to add/update participant
                 
-                // Cache user's session participation
-                await _redisService.SetStringAsync($"user:session:{userId}", sessionId, TimeSpan.FromHours(8));
-
-                // Notify other users in the session
-                await Clients.Group($"session_{sessionId}").SendAsync("UserJoined", new
+                var userId = Guid.Parse(Context.UserIdentifier!);
+                
+                // Verify session exists and is active
+                var session = await _sessionRepository.GetSessionAsync(sessionGuid);
+                if (session == null)
                 {
-                    UserId = userId,
-                    Username = GetCurrentUsername(),
-                    JoinedAt = DateTimeOffset.UtcNow
-                });
-
-                // Send session state to the joining user
-                await SendSessionStateToUser(sessionGuid, userId);
-
-                _logger.LogInformation("User {UserId} successfully joined session {SessionId}", userId, sessionId);
+                    return HubResult.CreateError<JoinSessionResult>("Session not found");
+                }
+                
+                if (session.Status != SessionStatus.InProgress)
+                {
+                    return HubResult.CreateError<JoinSessionResult>("Session is not active");
+                }
+                
+                // Add participant to session
+                var participant = await _sessionRepository.AddParticipantAsync(sessionGuid, userId, Context.ConnectionId);
+                
+                // Add to SignalR group
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"puzzle-{sessionId}");
+                
+                // Track connection in Redis
+                await _redisService.SetAsync($"connection:{Context.ConnectionId}", 
+                    new { SessionId = sessionId, UserId = userId }, 
+                    ConnectionTrackingExpiry);
+                await _redisService.SetAsync($"connection:{Context.ConnectionId}:session", sessionId, ConnectionTrackingExpiry);
+                await _redisService.SetAsync($"user:{userId}:session", sessionId, ConnectionTrackingExpiry);
+                
+                // Notify others in the session
+                await Clients.OthersInGroup($"puzzle-{sessionId}").SendAsync("UserJoined", 
+                    new UserJoinedNotification
+                    {
+                        UserId = userId.ToString(),
+                        DisplayName = participant.User?.DisplayName ?? "Unknown",
+                        SessionId = sessionId,
+                        JoinedAt = DateTime.UtcNow
+                    });
+                
+                // Get current session state
+                var sessionState = await GetSessionState(sessionGuid);
+                
+                _logger.LogInformation("User {UserId} joined session {SessionId}", userId, sessionId);
+                
+                return new JoinSessionResult
+                {
+                    Success = true,
+                    SessionId = sessionId,
+                    SessionState = sessionState
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error joining session {SessionId} for user {UserId}", sessionId, GetCurrentUserId());
-                await Clients.Caller.SendAsync("Error", "Failed to join session");
+                _logger.LogError(ex, "Error joining session {SessionId}", sessionId);
+                return HubResult.CreateError<JoinSessionResult>("Failed to join session");
             }
         }
 
         /// <summary>
-        /// Leave the current puzzle session
+        /// Moves a puzzle piece.
         /// </summary>
-        public async Task LeavePuzzleSession()
+        /// <param name="pieceId">The piece ID to move.</param>
+        /// <param name="x">The new X coordinate.</param>
+        /// <param name="y">The new Y coordinate.</param>
+        /// <param name="rotation">The rotation angle in degrees.</param>
+        /// <returns>The move result.</returns>
+        public async Task<MovePieceResult> MovePiece(string pieceId, double x, double y, int rotation)
         {
             try
             {
-                var connectionId = Context.ConnectionId;
-                var userId = GetCurrentUserId();
-
-                if (_connectionSessions.TryGetValue(connectionId, out var sessionId))
-                {
-                    _logger.LogInformation("User {UserId} leaving session {SessionId}", userId, sessionId);
-
-                    await HandleUserDisconnection(sessionId, userId, connectionId);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error leaving session for user {UserId}", GetCurrentUserId());
-                await Clients.Caller.SendAsync("Error", "Failed to leave session");
-            }
-        }
-
-        #endregion
-
-        #region Piece Movement
-
-        /// <summary>
-        /// Move a puzzle piece to a new position
-        /// </summary>
-        /// <param name="pieceId">Piece identifier</param>
-        /// <param name="x">New X coordinate</param>
-        /// <param name="y">New Y coordinate</param>
-        /// <param name="rotation">New rotation angle (0, 90, 180, 270)</param>
-        public async Task MovePiece(string pieceId, int x, int y, int rotation = 0)
-        {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var connectionId = Context.ConnectionId;
-
-                if (!_connectionSessions.TryGetValue(connectionId, out var sessionId))
-                {
-                    await Clients.Caller.SendAsync("Error", "Not connected to a session");
-                    return;
-                }
-
                 if (!Guid.TryParse(pieceId, out var pieceGuid))
                 {
-                    await Clients.Caller.SendAsync("Error", "Invalid piece ID format");
-                    return;
+                    return HubResult.CreateError<MovePieceResult>("Invalid piece ID format");
                 }
-
-                _logger.LogDebug("User {UserId} moving piece {PieceId} to ({X}, {Y}) with rotation {Rotation}", 
-                    userId, pieceId, x, y, rotation);
-
-                // Update piece position using stored procedure
-                var result = await _pieceRepository.UpdatePiecePositionAsync(pieceGuid, x, y, rotation, true);
-
-                if (result.Success)
+                
+                var userId = Guid.Parse(Context.UserIdentifier!);
+                
+                // Verify user is in a session
+                var sessionId = await _redisService.GetAsync<string>($"user:{userId}:session");
+                if (string.IsNullOrEmpty(sessionId))
                 {
-                    // Broadcast piece movement to all users in the session (except sender)
-                    await Clients.GroupExcept($"session_{sessionId}", connectionId).SendAsync("PieceMoved", new
+                    return HubResult.CreateError<MovePieceResult>("User not in a session");
+                }
+                
+                // Get the piece
+                var piece = await _pieceRepository.GetPieceAsync(pieceGuid);
+                if (piece == null)
+                {
+                    return HubResult.CreateError<MovePieceResult>("Piece not found");
+                }
+                
+                // Check if piece is locked by another user
+                if (piece.LockedByUserId.HasValue && piece.LockedByUserId.Value != userId)
+                {
+                    return HubResult.CreateError<MovePieceResult>("Piece is locked by another user");
+                }
+                
+                // Update piece position
+                var updated = await _pieceRepository.UpdatePiecePositionAsync(pieceGuid, x, y, rotation);
+                if (!updated)
+                {
+                    return HubResult.CreateError<MovePieceResult>("Failed to update piece position");
+                }
+                
+                // Check if piece is now correctly placed
+                var isPlaced = CheckIfPiecePlaced(piece, x, y, rotation);
+                if (isPlaced && !piece.IsPlaced)
+                {
+                    await _pieceRepository.MarkPieceAsPlacedAsync(pieceGuid);
+                }
+                
+                // Notify others in the group
+                await Clients.OthersInGroup($"puzzle-{sessionId}").SendAsync("PieceMoved", 
+                    new PieceMovedNotification
                     {
                         PieceId = pieceId,
-                        X = result.FinalX,
-                        Y = result.FinalY,
-                        Rotation = result.FinalRotation,
-                        IsPlaced = result.IsPlaced,
-                        UserId = userId,
-                        Username = GetCurrentUsername(),
-                        Timestamp = DateTimeOffset.UtcNow
+                        X = x,
+                        Y = y,
+                        Rotation = rotation,
+                        MovedByUserId = userId.ToString(),
+                        IsPlaced = isPlaced,
+                        MovedAt = DateTime.UtcNow
                     });
-
-                    // Send success confirmation to sender
-                    await Clients.Caller.SendAsync("PieceMoveConfirmed", new
-                    {
-                        PieceId = pieceId,
-                        X = result.FinalX,
-                        Y = result.FinalY,
-                        Rotation = result.FinalRotation,
-                        IsPlaced = result.IsPlaced,
-                        CompletedPieces = result.CompletedPieces,
-                        CompletionPercentage = result.CompletionPercentage
-                    });
-
-                    // Check for puzzle completion
-                    if (result.PuzzleCompleted)
-                    {
-                        await Clients.Group($"session_{sessionId}").SendAsync("PuzzleCompleted", new
-                        {
-                            CompletedBy = userId,
-                            CompletedByUsername = GetCurrentUsername(),
-                            CompletedAt = DateTimeOffset.UtcNow,
-                            TotalPieces = result.CompletedPieces
-                        });
-
-                        _logger.LogInformation("Puzzle completed in session {SessionId} by user {UserId}", sessionId, userId);
-                    }
-
-                    // Update progress in Redis cache
-                    await _redisService.SetObjectAsync($"session:progress:{sessionId}", new
-                    {
-                        CompletedPieces = result.CompletedPieces,
-                        CompletionPercentage = result.CompletionPercentage,
-                        LastUpdated = DateTimeOffset.UtcNow
-                    }, TimeSpan.FromHours(24));
-                }
-                else
+                
+                _logger.LogDebug("User {UserId} moved piece {PieceId} to ({X}, {Y})", userId, pieceId, x, y);
+                
+                return new MovePieceResult
                 {
-                    await Clients.Caller.SendAsync("Error", result.ErrorMessage ?? "Failed to move piece");
-                }
+                    Success = true,
+                    PieceId = pieceId,
+                    NewPosition = new PiecePosition { X = x, Y = y, Rotation = rotation },
+                    IsPlaced = isPlaced
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error moving piece {PieceId} for user {UserId}", pieceId, GetCurrentUserId());
-                await Clients.Caller.SendAsync("Error", "Failed to move piece");
+                _logger.LogError(ex, "Error moving piece {PieceId}", pieceId);
+                return HubResult.CreateError<MovePieceResult>("Failed to move piece");
             }
         }
 
         /// <summary>
-        /// Lock a puzzle piece for exclusive editing
+        /// Locks a puzzle piece for exclusive editing.
         /// </summary>
-        /// <param name="pieceId">Piece identifier to lock</param>
-        public async Task LockPiece(string pieceId)
+        /// <param name="pieceId">The piece ID to lock.</param>
+        /// <returns>The lock result.</returns>
+        public async Task<LockPieceResult> LockPiece(string pieceId)
         {
             try
             {
-                var userId = GetCurrentUserId();
-                var connectionId = Context.ConnectionId;
-
-                if (!_connectionSessions.TryGetValue(connectionId, out var sessionId))
-                {
-                    await Clients.Caller.SendAsync("Error", "Not connected to a session");
-                    return;
-                }
-
                 if (!Guid.TryParse(pieceId, out var pieceGuid))
                 {
-                    await Clients.Caller.SendAsync("Error", "Invalid piece ID format");
-                    return;
+                    return HubResult.CreateError<LockPieceResult>("Invalid piece ID format");
                 }
-
-                var success = await _pieceRepository.LockPieceAsync(pieceGuid, userId);
-
-                if (success)
+                
+                var userId = Guid.Parse(Context.UserIdentifier!);
+                
+                // Get the piece
+                var piece = await _pieceRepository.GetPieceAsync(pieceGuid);
+                if (piece == null)
                 {
-                    // Notify all users in the session about the lock
-                    await Clients.Group($"session_{sessionId}").SendAsync("PieceLocked", new
+                    return HubResult.CreateError<LockPieceResult>("Piece not found");
+                }
+                
+                // Try to acquire distributed lock via Redis
+                var lockAcquired = await _redisService.SetAsync(
+                    $"piece-lock:{pieceId}", 
+                    userId.ToString(), 
+                    PieceLockDuration, 
+                    When.NotExists);
+                
+                if (!lockAcquired)
+                {
+                    // Check who has the lock
+                    var currentLockHolder = await _redisService.GetAsync<string>($"piece-lock:{pieceId}");
+                    return new LockPieceResult
+                    {
+                        Success = false,
+                        Error = "Piece is already locked",
+                        PieceId = pieceId,
+                        LockedBy = currentLockHolder ?? piece.LockedByUserId?.ToString()
+                    };
+                }
+                
+                // Update database
+                var dbLocked = await _pieceRepository.LockPieceAsync(pieceGuid, userId);
+                if (!dbLocked)
+                {
+                    // Release Redis lock if DB update failed
+                    await _redisService.DeleteAsync($"piece-lock:{pieceId}");
+                    return HubResult.CreateError<LockPieceResult>("Failed to lock piece in database");
+                }
+                
+                var sessionId = await _redisService.GetAsync<string>($"user:{userId}:session");
+                var lockExpiry = DateTime.UtcNow.Add(PieceLockDuration);
+                
+                // Notify others
+                await Clients.OthersInGroup($"puzzle-{sessionId}").SendAsync("PieceLocked", 
+                    new PieceLockedNotification
                     {
                         PieceId = pieceId,
-                        LockedBy = userId,
-                        LockedByUsername = GetCurrentUsername(),
-                        LockedAt = DateTimeOffset.UtcNow
+                        LockedByUserId = userId.ToString(),
+                        LockExpiry = lockExpiry
                     });
-
-                    _logger.LogDebug("Piece {PieceId} locked by user {UserId}", pieceId, userId);
-                }
-                else
+                
+                _logger.LogDebug("User {UserId} locked piece {PieceId}", userId, pieceId);
+                
+                return new LockPieceResult
                 {
-                    await Clients.Caller.SendAsync("Error", "Failed to lock piece - may already be locked");
-                }
+                    Success = true,
+                    PieceId = pieceId,
+                    LockedBy = userId.ToString(),
+                    LockExpiry = lockExpiry
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error locking piece {PieceId} for user {UserId}", pieceId, GetCurrentUserId());
-                await Clients.Caller.SendAsync("Error", "Failed to lock piece");
+                _logger.LogError(ex, "Error locking piece {PieceId}", pieceId);
+                return HubResult.CreateError<LockPieceResult>("Failed to lock piece");
             }
         }
 
         /// <summary>
-        /// Unlock a puzzle piece
+        /// Unlocks a puzzle piece.
         /// </summary>
-        /// <param name="pieceId">Piece identifier to unlock</param>
-        public async Task UnlockPiece(string pieceId)
+        /// <param name="pieceId">The piece ID to unlock.</param>
+        /// <returns>Success status.</returns>
+        public async Task<bool> UnlockPiece(string pieceId)
         {
             try
             {
-                var userId = GetCurrentUserId();
-                var connectionId = Context.ConnectionId;
-
-                if (!_connectionSessions.TryGetValue(connectionId, out var sessionId))
-                {
-                    await Clients.Caller.SendAsync("Error", "Not connected to a session");
-                    return;
-                }
-
                 if (!Guid.TryParse(pieceId, out var pieceGuid))
                 {
-                    await Clients.Caller.SendAsync("Error", "Invalid piece ID format");
-                    return;
+                    return false;
                 }
-
-                var success = await _pieceRepository.UnlockPieceAsync(pieceGuid, userId);
-
-                if (success)
+                
+                var userId = Guid.Parse(Context.UserIdentifier!);
+                
+                // Verify user owns the lock
+                var lockHolder = await _redisService.GetAsync<string>($"piece-lock:{pieceId}");
+                if (lockHolder != userId.ToString())
                 {
-                    // Notify all users in the session about the unlock
-                    await Clients.Group($"session_{sessionId}").SendAsync("PieceUnlocked", new
+                    return false;
+                }
+                
+                // Release distributed lock
+                await _redisService.DeleteAsync($"piece-lock:{pieceId}");
+                
+                // Update database
+                await _pieceRepository.UnlockPieceAsync(pieceGuid);
+                
+                var sessionId = await _redisService.GetAsync<string>($"user:{userId}:session");
+                
+                // Notify others
+                await Clients.OthersInGroup($"puzzle-{sessionId}").SendAsync("PieceUnlocked", 
+                    new PieceUnlockedNotification
                     {
                         PieceId = pieceId,
-                        UnlockedBy = userId,
-                        UnlockedByUsername = GetCurrentUsername(),
-                        UnlockedAt = DateTimeOffset.UtcNow
+                        UnlockedByUserId = userId.ToString()
                     });
-
-                    _logger.LogDebug("Piece {PieceId} unlocked by user {UserId}", pieceId, userId);
-                }
-                else
-                {
-                    await Clients.Caller.SendAsync("Error", "Failed to unlock piece - you may not own the lock");
-                }
+                
+                _logger.LogDebug("User {UserId} unlocked piece {PieceId}", userId, pieceId);
+                
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error unlocking piece {PieceId} for user {UserId}", pieceId, GetCurrentUserId());
-                await Clients.Caller.SendAsync("Error", "Failed to unlock piece");
+                _logger.LogError(ex, "Error unlocking piece {PieceId}", pieceId);
+                return false;
             }
         }
 
-        #endregion
-
-        #region Chat and Communication
-
         /// <summary>
-        /// Send a chat message to the session
+        /// Sends a chat message to the session.
         /// </summary>
-        /// <param name="message">Message content</param>
+        /// <param name="message">The message content.</param>
         public async Task SendChatMessage(string message)
         {
             try
             {
-                var userId = GetCurrentUserId();
-                var connectionId = Context.ConnectionId;
-
-                if (!_connectionSessions.TryGetValue(connectionId, out var sessionId))
+                if (string.IsNullOrWhiteSpace(message))
                 {
-                    await Clients.Caller.SendAsync("Error", "Not connected to a session");
                     return;
                 }
-
-                if (string.IsNullOrWhiteSpace(message) || message.Length > 1000)
+                
+                var userId = Guid.Parse(Context.UserIdentifier!);
+                var sessionId = await _redisService.GetAsync<string>($"user:{userId}:session");
+                
+                if (string.IsNullOrEmpty(sessionId) || !Guid.TryParse(sessionId, out var sessionGuid))
                 {
-                    await Clients.Caller.SendAsync("Error", "Invalid message length");
                     return;
                 }
-
-                // Store message in database (would call stored procedure)
-                var chatMessage = new
-                {
-                    Id = Guid.NewGuid(),
-                    SessionId = sessionId,
-                    UserId = userId,
-                    Username = GetCurrentUsername(),
-                    Message = message.Trim(),
-                    Type = "Text",
-                    CreatedAt = DateTimeOffset.UtcNow
-                };
-
-                // Broadcast message to all users in the session
-                await Clients.Group($"session_{sessionId}").SendAsync("ChatMessage", chatMessage);
-
-                _logger.LogDebug("Chat message sent by user {UserId} in session {SessionId}", userId, sessionId);
+                
+                // Save message to database
+                var chatMessage = await _sessionRepository.SaveChatMessageAsync(
+                    sessionGuid, userId, message, MessageType.Chat);
+                
+                // Get user info for display name
+                var participant = await _sessionRepository.GetParticipantAsync(sessionGuid, userId);
+                
+                // Broadcast to all in session (including sender)
+                await Clients.Group($"puzzle-{sessionId}").SendAsync("ChatMessage", 
+                    new ChatMessageNotification
+                    {
+                        MessageId = chatMessage.Id.ToString(),
+                        Message = message,
+                        UserId = userId.ToString(),
+                        DisplayName = participant?.User?.DisplayName ?? "Unknown",
+                        SessionId = sessionId,
+                        SentAt = chatMessage.CreatedAt
+                    });
+                
+                _logger.LogDebug("User {UserId} sent chat message in session {SessionId}", userId, sessionId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending chat message for user {UserId}", GetCurrentUserId());
-                await Clients.Caller.SendAsync("Error", "Failed to send message");
+                _logger.LogError(ex, "Error sending chat message");
             }
         }
 
         /// <summary>
-        /// Update user's cursor position for collaborative indicators
+        /// Updates the user's cursor position (throttled).
         /// </summary>
-        /// <param name="x">Cursor X coordinate</param>
-        /// <param name="y">Cursor Y coordinate</param>
-        public async Task UpdateCursor(int x, int y)
+        /// <param name="x">The cursor X position.</param>
+        /// <param name="y">The cursor Y position.</param>
+        public async Task UpdateCursor(double x, double y)
         {
             try
             {
-                var userId = GetCurrentUserId();
-                var connectionId = Context.ConnectionId;
-
-                if (!_connectionSessions.TryGetValue(connectionId, out var sessionId))
+                var userId = Context.UserIdentifier!;
+                var sessionId = await _redisService.GetAsync<string>($"user:{userId}:session");
+                
+                if (string.IsNullOrEmpty(sessionId))
                 {
-                    return; // Silently ignore if not in session
+                    return;
                 }
-
-                // Broadcast cursor position to other users (high frequency, so exclude sender)
-                await Clients.GroupExcept($"session_{sessionId}", connectionId).SendAsync("CursorUpdate", new
+                
+                // Get or create cursor channel for throttling
+                var channel = _cursorChannels.GetOrAdd(Context.ConnectionId, _ =>
+                {
+                    var ch = Channel.CreateUnbounded<CursorUpdateNotification>();
+                    _ = ProcessCursorUpdates(ch.Reader, sessionId);
+                    return ch;
+                });
+                
+                // Queue cursor update
+                await channel.Writer.WriteAsync(new CursorUpdateNotification
                 {
                     UserId = userId,
                     X = x,
-                    Y = y,
-                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                    Y = y
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating cursor for user {UserId}", GetCurrentUserId());
-                // Don't send error for cursor updates to avoid spam
+                _logger.LogError(ex, "Error updating cursor position");
             }
         }
 
-        #endregion
-
-        #region Helper Methods
-
-        private Guid GetCurrentUserId()
-        {
-            var userIdString = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(userIdString, out var userId) ? userId : Guid.Empty;
-        }
-
-        private string GetCurrentUsername()
-        {
-            return Context.User?.FindFirst(ClaimTypes.Name)?.Value ?? "Unknown";
-        }
-
-        private async Task HandleUserDisconnection(string sessionId, Guid userId, string connectionId)
+        /// <summary>
+        /// Checks if the puzzle is completed.
+        /// </summary>
+        /// <param name="sessionId">The session ID to check.</param>
+        public async Task CheckPuzzleCompletion(string sessionId)
         {
             try
             {
-                // Remove from SignalR group
-                await Groups.RemoveFromGroupAsync(connectionId, $"session_{sessionId}");
-
-                // Release any locked pieces
-                await _pieceRepository.UnlockAllPiecesByUserAsync(userId);
-
-                // Update participant status (would call stored procedure)
+                if (!Guid.TryParse(sessionId, out var sessionGuid))
+                {
+                    return;
+                }
                 
-                // Notify other users
-                await Clients.Group($"session_{sessionId}").SendAsync("UserLeft", new
+                var session = await _sessionRepository.GetSessionAsync(sessionGuid);
+                if (session == null || session.Status != SessionStatus.InProgress)
                 {
-                    UserId = userId,
-                    Username = GetCurrentUsername(),
-                    LeftAt = DateTimeOffset.UtcNow
-                });
-
-                // Clean up session tracking
-                _connectionSessions.Remove(connectionId);
-
-                _logger.LogInformation("User {UserId} disconnection handled for session {SessionId}", userId, sessionId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error handling user disconnection for user {UserId} in session {SessionId}", userId, sessionId);
-            }
-        }
-
-        private async Task SendSessionStateToUser(Guid sessionId, Guid userId)
-        {
-            try
-            {
-                // Get current session state from cache or database
-                var sessionState = await _redisService.GetObjectAsync<object>($"session:state:{sessionId}");
-
-                if (sessionState != null)
+                    return;
+                }
+                
+                // Check placed piece count
+                var placedCount = await _pieceRepository.GetPlacedPieceCountAsync(session.PuzzleId);
+                var totalCount = await _pieceRepository.GetTotalPieceCountAsync(session.PuzzleId);
+                
+                if (placedCount >= totalCount)
                 {
-                    await Clients.User(userId.ToString()).SendAsync("SessionState", sessionState);
+                    // Puzzle completed!
+                    await _sessionRepository.CompleteSessionAsync(sessionGuid);
+                    
+                    // Get participant stats
+                    var participants = await _sessionRepository.GetSessionParticipantsAsync(sessionGuid);
+                    var stats = participants.Select(p => new ParticipantStats
+                    {
+                        UserId = p.UserId.ToString(),
+                        DisplayName = p.User?.DisplayName ?? "Unknown",
+                        PiecesPlaced = p.PiecesPlaced,
+                        TimeSpent = p.TotalActiveTime
+                    }).ToArray();
+                    
+                    // Notify all participants
+                    await Clients.Group($"puzzle-{sessionId}").SendAsync("PuzzleCompleted", 
+                        new PuzzleCompletedNotification
+                        {
+                            SessionId = sessionId,
+                            PuzzleId = session.PuzzleId.ToString(),
+                            CompletedAt = DateTime.UtcNow,
+                            TotalTime = DateTime.UtcNow - session.CreatedAt,
+                            ParticipantStats = stats
+                        });
+                    
+                    _logger.LogInformation("Puzzle completed in session {SessionId}", sessionId);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending session state to user {UserId} for session {SessionId}", userId, sessionId);
+                _logger.LogError(ex, "Error checking puzzle completion");
             }
         }
 
-        #endregion
+        /// <summary>
+        /// Processes throttled cursor updates.
+        /// </summary>
+        private async Task ProcessCursorUpdates(ChannelReader<CursorUpdateNotification> reader, string sessionId)
+        {
+            var lastUpdate = DateTime.UtcNow;
+            CursorUpdateNotification? latestUpdate = null;
+            
+            try
+            {
+                await foreach (var update in reader.ReadAllAsync())
+                {
+                    latestUpdate = update;
+                    
+                    // Check if enough time has passed
+                    if (DateTime.UtcNow - lastUpdate >= CursorThrottleInterval)
+                    {
+                        // Publish to Redis for other servers
+                        await _redisService.PublishAsync($"cursor:{sessionId}", latestUpdate);
+                        
+                        // Send to others in group
+                        await Clients.OthersInGroup($"puzzle-{sessionId}").SendAsync("CursorUpdate", latestUpdate);
+                        
+                        lastUpdate = DateTime.UtcNow;
+                        latestUpdate = null;
+                    }
+                }
+                
+                // Send final update if any
+                if (latestUpdate != null)
+                {
+                    await _redisService.PublishAsync($"cursor:{sessionId}", latestUpdate);
+                    await Clients.OthersInGroup($"puzzle-{sessionId}").SendAsync("CursorUpdate", latestUpdate);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing cursor updates");
+            }
+        }
+
+        /// <summary>
+        /// Gets the current session state.
+        /// </summary>
+        private async Task<SessionStateDto> GetSessionState(Guid sessionId)
+        {
+            var session = await _sessionRepository.GetSessionAsync(sessionId);
+            var participants = await _sessionRepository.GetSessionParticipantsAsync(sessionId);
+            var pieces = await _pieceRepository.GetPuzzlePiecesAsync(session!.PuzzleId);
+            
+            return new SessionStateDto
+            {
+                SessionId = sessionId.ToString(),
+                PuzzleId = session.PuzzleId.ToString(),
+                Name = session.Name,
+                CompletionPercentage = session.CompletionPercentage,
+                Participants = participants.Select(p => new ParticipantDto
+                {
+                    UserId = p.UserId.ToString(),
+                    DisplayName = p.User?.DisplayName ?? "Unknown",
+                    IsOnline = p.Status == ParticipantStatus.Active,
+                    Role = p.Role.ToString()
+                }).ToArray(),
+                Pieces = pieces.Select(p => new PieceStateDto
+                {
+                    PieceId = p.Id.ToString(),
+                    Position = new PiecePosition 
+                    { 
+                        X = p.CurrentX, 
+                        Y = p.CurrentY, 
+                        Rotation = p.Rotation 
+                    },
+                    IsLocked = p.LockedByUserId.HasValue,
+                    LockedBy = p.LockedByUserId?.ToString(),
+                    IsPlaced = p.IsPlaced
+                }).ToArray()
+            };
+        }
+
+        /// <summary>
+        /// Checks if a piece is correctly placed within tolerance.
+        /// </summary>
+        private bool CheckIfPiecePlaced(Core.Entities.PuzzlePiece piece, double x, double y, int rotation)
+        {
+            const double PositionTolerance = 5.0; // 5 pixels
+            const int RotationTolerance = 5; // 5 degrees
+            
+            var xDiff = Math.Abs(x - piece.CorrectX);
+            var yDiff = Math.Abs(y - piece.CorrectY);
+            var rotDiff = Math.Abs(rotation % 360); // Normalize rotation
+            
+            return xDiff <= PositionTolerance && 
+                   yDiff <= PositionTolerance && 
+                   rotDiff <= RotationTolerance;
+        }
     }
 }
