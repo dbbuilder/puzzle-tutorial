@@ -1,0 +1,77 @@
+# Optimized multi-stage Dockerfile for Collaborative Puzzle Platform
+
+# Stage 1: Base image with common dependencies
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build-base
+WORKDIR /src
+
+# Install build dependencies once
+RUN apk add --no-cache bash
+
+# Stage 2: Restore dependencies (cached layer)
+FROM build-base AS restore
+# Copy only project files first for better caching
+COPY Directory.*.props ./
+COPY *.sln ./
+COPY src/*/*.csproj ./
+RUN for file in $(find . -name "*.csproj"); do \
+    dir=$(dirname $file); \
+    mkdir -p src/$dir && mv $file src/$dir/; \
+    done
+
+# Restore all dependencies in one go
+RUN dotnet restore --runtime linux-musl-x64
+
+# Stage 3: Build
+FROM restore AS build
+# Now copy all source code
+COPY src/ src/
+WORKDIR /src
+
+# Build in Release mode
+RUN dotnet build -c Release --no-restore --runtime linux-musl-x64
+
+# Stage 4: Publish
+FROM build AS publish
+RUN dotnet publish src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-build \
+    --runtime linux-musl-x64 \
+    --self-contained false
+
+# Stage 5: Runtime (minimal Alpine image)
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
+WORKDIR /app
+
+# Install only runtime dependencies
+RUN apk add --no-cache \
+    curl \
+    icu-libs \
+    krb5-libs \
+    libgcc \
+    libintl \
+    libssl3 \
+    libstdc++ \
+    zlib
+
+# Copy published app
+COPY --from=publish /app/publish .
+
+# Copy static files
+COPY src/CollaborativePuzzle.Api/wwwroot ./wwwroot/
+COPY src/CollaborativePuzzle.Api/appsettings*.json ./
+
+# Create non-root user
+RUN addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app
+
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:80/health || exit 1
+
+EXPOSE 80
+
+ENTRYPOINT ["dotnet", "CollaborativePuzzle.Api.dll"]

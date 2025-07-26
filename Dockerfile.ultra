@@ -1,0 +1,67 @@
+# Ultra-optimized Dockerfile with aggressive caching
+
+# Stage 1: Create a reusable base with restored packages
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS packages
+WORKDIR /src
+
+# Enable package caching
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true \
+    DOTNET_CLI_TELEMETRY_OPTOUT=true \
+    NUGET_XMLDOC_MODE=skip
+
+# Copy only what's needed for restore
+COPY Directory.*.props ./
+COPY *.sln ./
+
+# Create project structure
+RUN mkdir -p src/CollaborativePuzzle.Core \
+    src/CollaborativePuzzle.Infrastructure \
+    src/CollaborativePuzzle.Hubs \
+    src/CollaborativePuzzle.Api
+
+# Copy project files
+COPY src/CollaborativePuzzle.Core/*.csproj src/CollaborativePuzzle.Core/
+COPY src/CollaborativePuzzle.Infrastructure/*.csproj src/CollaborativePuzzle.Infrastructure/
+COPY src/CollaborativePuzzle.Hubs/*.csproj src/CollaborativePuzzle.Hubs/
+COPY src/CollaborativePuzzle.Api/*.csproj src/CollaborativePuzzle.Api/
+
+# Restore with minimal output
+RUN dotnet restore src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj \
+    --runtime linux-musl-x64 \
+    -v quiet
+
+# Stage 2: Build
+FROM packages AS build
+COPY src/ src/
+
+# Build and publish in one step
+RUN dotnet publish src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj \
+    -c Release \
+    -o /out \
+    --no-restore \
+    --runtime linux-musl-x64 \
+    --self-contained false \
+    -v quiet
+
+# Stage 3: Minimal runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
+WORKDIR /app
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Copy app
+COPY --from=build /out .
+
+# Copy static content
+COPY --from=build /src/src/CollaborativePuzzle.Api/wwwroot ./wwwroot/
+COPY --from=build /src/src/CollaborativePuzzle.Api/appsettings*.json ./
+
+# Non-root user
+RUN adduser -D appuser && chown -R appuser /app
+USER appuser
+
+EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:8080
+
+ENTRYPOINT ["dotnet", "CollaborativePuzzle.Api.dll"]

@@ -1,0 +1,32 @@
+# Turbo Dockerfile - Maximum speed optimization
+
+# Build stage with minimal layers
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Speed optimizations
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true \
+    DOTNET_CLI_TELEMETRY_OPTOUT=true \
+    NUGET_XMLDOC_MODE=skip \
+    DOTNET_UseRazorBuildServer=false \
+    DOTNET_UseSharedCompilation=false
+
+# Copy everything at once for dev speed (not optimal for caching)
+COPY . .
+
+# Single command to restore, build, and publish
+RUN dotnet publish src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj \
+    -c Release \
+    -o /app \
+    --self-contained false \
+    --verbosity quiet
+
+# Minimal runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
+WORKDIR /app
+
+# Just copy the output
+COPY --from=build /app .
+
+EXPOSE 80
+ENTRYPOINT ["dotnet", "CollaborativePuzzle.Api.dll"]

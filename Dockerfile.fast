@@ -1,0 +1,43 @@
+# Ultra-fast Dockerfile with aggressive optimizations
+
+# Use slim SDK for faster downloads
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS restore
+WORKDIR /src
+
+# Copy and restore in one layer - only csproj files
+COPY Directory.*.props ./
+COPY *.sln ./
+
+# Create directory structure and copy only csproj files
+COPY src/CollaborativePuzzle.Core/*.csproj src/CollaborativePuzzle.Core/
+COPY src/CollaborativePuzzle.Infrastructure/*.csproj src/CollaborativePuzzle.Infrastructure/
+COPY src/CollaborativePuzzle.Hubs/*.csproj src/CollaborativePuzzle.Hubs/
+COPY src/CollaborativePuzzle.Api/*.csproj src/CollaborativePuzzle.Api/
+
+# Single restore for all projects
+RUN dotnet restore src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj
+
+# Build stage
+FROM restore AS build
+COPY src/ src/
+
+# Build directly to publish output (skip separate build step)
+RUN dotnet publish src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore
+
+# Runtime - use minimal Alpine for smallest size
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
+WORKDIR /app
+
+# Copy everything needed
+COPY --from=build /app/publish .
+COPY src/CollaborativePuzzle.Api/wwwroot ./wwwroot/
+COPY src/CollaborativePuzzle.Api/appsettings*.json ./
+
+# Alpine runs as root by default, but we'll use port 80
+EXPOSE 80
+ENV ASPNETCORE_URLS=http://+:80
+
+ENTRYPOINT ["dotnet", "CollaborativePuzzle.Api.dll"]

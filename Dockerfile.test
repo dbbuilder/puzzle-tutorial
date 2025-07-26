@@ -1,0 +1,19 @@
+# Test Dockerfile to identify bottlenecks
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS test
+WORKDIR /src
+
+# Test 1: Copy project files
+COPY Directory.*.props ./
+COPY *.sln ./
+RUN echo "Project files copied"
+
+# Test 2: Copy csproj files only
+COPY src/CollaborativePuzzle.Core/*.csproj src/CollaborativePuzzle.Core/
+COPY src/CollaborativePuzzle.Infrastructure/*.csproj src/CollaborativePuzzle.Infrastructure/
+COPY src/CollaborativePuzzle.Hubs/*.csproj src/CollaborativePuzzle.Hubs/
+COPY src/CollaborativePuzzle.Api/*.csproj src/CollaborativePuzzle.Api/
+RUN echo "Csproj files copied"
+
+# Test 3: Restore (this is likely the slow part)
+RUN dotnet restore src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj --verbosity normal

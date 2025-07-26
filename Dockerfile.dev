@@ -1,0 +1,39 @@
+# Development Dockerfile - Optimized for speed, not security
+
+# Build everything in one stage for speed
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /app
+
+# Cache nuget packages in Docker layer
+ENV NUGET_PACKAGES=/nuget
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=true
+
+# Copy and restore as distinct layers
+COPY *.sln .
+COPY Directory.*.props .
+COPY src/*/*.csproj ./
+RUN for file in $(find . -name "*.csproj"); do \
+    mkdir -p $(dirname $file) && mv $file $(dirname $file)/; \
+    done
+
+# Restore with caching
+RUN --mount=type=cache,target=/nuget \
+    dotnet restore
+
+# Copy source and build
+COPY src/ ./src/
+RUN --mount=type=cache,target=/nuget \
+    dotnet publish src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj \
+    -c Debug \
+    -o out
+
+# Single stage output for development
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+WORKDIR /app
+COPY --from=build /app/out .
+COPY src/CollaborativePuzzle.Api/wwwroot ./wwwroot/
+COPY src/CollaborativePuzzle.Api/appsettings*.json ./
+
+EXPOSE 80
+ENTRYPOINT ["dotnet", "CollaborativePuzzle.Api.dll"]
