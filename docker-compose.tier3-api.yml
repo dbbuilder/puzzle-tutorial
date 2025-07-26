@@ -1,0 +1,63 @@
+# Tier 3: API with Basic Infrastructure
+# Purpose: Test API connectivity with Redis only (using in-memory for other services)
+# Test: docker-compose -f docker-compose.tier3-api.yml up
+# Verify: http://localhost:5000/health
+
+version: '3.8'
+
+services:
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: puzzle-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - puzzle-network
+
+  # API Service (minimal configuration)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    container_name: puzzle-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false
+      - UseInMemoryDatabase=true
+      - DisableAuthentication=true
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft.AspNetCore=Warning
+      - Logging__LogLevel__Microsoft.AspNetCore.SignalR=Debug
+    ports:
+      - "5000:80"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src/CollaborativePuzzle.Api/wwwroot:/app/wwwroot:ro
+      - ./src/CollaborativePuzzle.Api/appsettings.Docker.json:/app/appsettings.Docker.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    networks:
+      - puzzle-network
+
+networks:
+  puzzle-network:
+    driver: bridge
+
+volumes:
+  redis-data:

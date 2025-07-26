@@ -25,13 +25,22 @@ RUN dotnet publish src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj -c
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/publish .
 
 # Create wwwroot directory
 RUN mkdir -p wwwroot
 
-# Copy static files
+# Copy static files and configuration
 COPY src/CollaborativePuzzle.Api/wwwroot wwwroot/
+COPY src/CollaborativePuzzle.Api/appsettings.*.json ./
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:80/health || exit 1
 
 EXPOSE 80
 ENTRYPOINT ["dotnet", "CollaborativePuzzle.Api.dll"]

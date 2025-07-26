@@ -1,0 +1,30 @@
+# Tier 1: Redis Only
+# Purpose: Verify basic Redis connectivity
+# Test: docker-compose -f docker-compose.tier1-redis.yml up
+# Verify: redis-cli -h localhost -p 6379 ping
+
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: puzzle-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - puzzle-network
+
+networks:
+  puzzle-network:
+    driver: bridge
+
+volumes:
+  redis-data:

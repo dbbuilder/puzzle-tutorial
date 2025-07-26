@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # SQL Server Database
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: puzzle-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    networks:
+      - puzzle-network
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "YourStrong@Passw0rd" -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: puzzle-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - puzzle-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # MQTT Broker (Mosquitto)
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: puzzle-mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto/config:/mosquitto/config:ro
+      - mqtt-data:/mosquitto/data
+      - mqtt-log:/mosquitto/log
+    networks:
+      - puzzle-network
+
+  # Collaborative Puzzle API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    container_name: puzzle-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CollaborativePuzzle;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false
+      - Mqtt__Broker=mqtt
+      - Mqtt__Port=1883
+      - Mqtt__ClientId=puzzle-api
+      - Jwt__SecretKey=YourSuperSecretKeyForJwtTokenGeneration123!
+      - Jwt__Issuer=CollaborativePuzzle
+      - Jwt__Audience=CollaborativePuzzleUsers
+      - WebRTC__StunServers__0__Urls=stun:stun.l.google.com:19302
+      - WebRTC__TurnServers__0__Urls=turn:coturn:3478
+      - WebRTC__TurnServers__0__Username=testuser
+      - WebRTC__TurnServers__0__Credential=testpassword
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft.AspNetCore=Warning
+      - Serilog__MinimumLevel__Default=Information
+    ports:
+      - "5000:80"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    networks:
+      - puzzle-network
+    volumes:
+      - ./src/CollaborativePuzzle.Api/wwwroot:/app/wwwroot:ro
+
+  # TURN Server for WebRTC
+  coturn:
+    image: coturn/coturn:latest
+    container_name: puzzle-turn
+    network_mode: host
+    command: >
+      -n 
+      --lt-cred-mech 
+      --fingerprint 
+      --no-multicast-peers 
+      --no-cli 
+      --no-tlsv1 
+      --no-tlsv1_1 
+      --realm=puzzle.local 
+      --user=testuser:testpassword 
+      --listening-port=3478
+      --min-port=49152
+      --max-port=65535
+      --verbose
+
+networks:
+  puzzle-network:
+    driver: bridge
+    name: puzzle-network
+
+volumes:
+  sqlserver-data:
+  redis-data:
+  mqtt-data:
+  mqtt-log:
