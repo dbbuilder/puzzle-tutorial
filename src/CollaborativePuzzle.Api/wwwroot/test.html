@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Puzzle Platform - SignalR Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        .connected { background: #28a745; color: white; }
+        .disconnected { background: #dc3545; color: white; }
+        .connecting { background: #ffc107; color: black; }
+    </style>
+</head>
+<body>
+    <h1>Collaborative Puzzle Platform - Test Page</h1>
+    
+    <div class="container">
+        <div class="section">
+            <h2>Connection</h2>
+            <p>Status: <span id="status" class="status disconnected">Disconnected</span></p>
+            <button id="connect">Connect</button>
+            <button id="disconnect" disabled>Disconnect</button>
+            
+            <h3>Session</h3>
+            <input type="text" id="sessionId" placeholder="Session ID" value="test-session-123">
+            <button id="joinSession" disabled>Join Session</button>
+            <button id="leaveSession" disabled>Leave Session</button>
+        </div>
+        
+        <div class="section">
+            <h2>Actions</h2>
+            <h3>Piece Control</h3>
+            <input type="text" id="pieceId" placeholder="Piece ID" value="piece-1">
+            <button id="lockPiece" disabled>Lock Piece</button>
+            <button id="unlockPiece" disabled>Unlock Piece</button>
+            <br>
+            <button id="movePiece" disabled>Move Random</button>
+            
+            <h3>Chat</h3>
+            <input type="text" id="chatMessage" placeholder="Message">
+            <button id="sendChat" disabled>Send</button>
+            
+            <h3>Cursor</h3>
+            <button id="sendCursor" disabled>Send Cursor Update</button>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Event Log</h2>
+        <div id="log" class="log"></div>
+        <button onclick="document.getElementById('log').innerHTML = ''">Clear Log</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <script>
+        let connection = null;
+        let sessionId = null;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            logDiv.innerHTML += `<div style="color: ${color}">[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(status) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = status;
+            statusEl.className = 'status ' + status.toLowerCase();
+            
+            const isConnected = status === 'Connected';
+            document.getElementById('connect').disabled = isConnected;
+            document.getElementById('disconnect').disabled = !isConnected;
+            document.getElementById('joinSession').disabled = !isConnected || sessionId;
+            document.getElementById('leaveSession').disabled = !isConnected || !sessionId;
+            document.getElementById('lockPiece').disabled = !isConnected || !sessionId;
+            document.getElementById('unlockPiece').disabled = !isConnected || !sessionId;
+            document.getElementById('movePiece').disabled = !isConnected || !sessionId;
+            document.getElementById('sendChat').disabled = !isConnected || !sessionId;
+            document.getElementById('sendCursor').disabled = !isConnected || !sessionId;
+        }
+        
+        async function connect() {
+            try {
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl("/puzzlehub")
+                    .withAutomaticReconnect()
+                    .configureLogging(signalR.LogLevel.Information)
+                    .build();
+                
+                // Connection events
+                connection.onreconnecting(() => {
+                    log('Reconnecting...', 'warn');
+                    updateStatus('Connecting');
+                });
+                
+                connection.onreconnected(() => {
+                    log('Reconnected!', 'success');
+                    updateStatus('Connected');
+                });
+                
+                connection.onclose(() => {
+                    log('Connection closed', 'error');
+                    updateStatus('Disconnected');
+                    sessionId = null;
+                });
+                
+                // Hub events
+                connection.on("UserJoined", (notification) => {
+                    log(`User joined: ${notification.userId} - ${notification.displayName}`, 'success');
+                });
+                
+                connection.on("UserLeft", (notification) => {
+                    log(`User left: ${notification.userId}`, 'warn');
+                });
+                
+                connection.on("PieceLocked", (notification) => {
+                    log(`Piece ${notification.pieceId} locked by ${notification.lockedByUserId}`);
+                });
+                
+                connection.on("PieceUnlocked", (notification) => {
+                    log(`Piece ${notification.pieceId} unlocked`);
+                });
+                
+                connection.on("PieceMoved", (notification) => {
+                    log(`Piece ${notification.pieceId} moved to (${notification.x}, ${notification.y})`);
+                });
+                
+                connection.on("ChatMessage", (notification) => {
+                    log(`Chat: ${notification.senderName}: ${notification.message}`);
+                });
+                
+                connection.on("CursorUpdate", (notification) => {
+                    log(`Cursor: User ${notification.userId} at (${notification.x}, ${notification.y})`);
+                });
+                
+                connection.on("PuzzleCompleted", (notification) => {
+                    log(`PUZZLE COMPLETED! Time: ${notification.completionTime}`, 'success');
+                });
+                
+                updateStatus('Connecting');
+                await connection.start();
+                log('Connected to SignalR hub', 'success');
+                updateStatus('Connected');
+                
+            } catch (err) {
+                log('Connection failed: ' + err, 'error');
+                updateStatus('Disconnected');
+            }
+        }
+        
+        async function disconnect() {
+            if (connection) {
+                await connection.stop();
+                connection = null;
+                sessionId = null;
+            }
+        }
+        
+        async function joinSession() {
+            const sid = document.getElementById('sessionId').value;
+            if (!sid) return;
+            
+            try {
+                const result = await connection.invoke("JoinPuzzleSession", sid);
+                if (result.success) {
+                    sessionId = sid;
+                    log(`Joined session: ${sid}`, 'success');
+                    updateStatus('Connected');
+                } else {
+                    log(`Failed to join session: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                log('Join session error: ' + err, 'error');
+            }
+        }
+        
+        async function leaveSession() {
+            if (!sessionId) return;
+            
+            try {
+                const result = await connection.invoke("LeavePuzzleSession", sessionId);
+                if (result.success) {
+                    log(`Left session: ${sessionId}`, 'success');
+                    sessionId = null;
+                    updateStatus('Connected');
+                } else {
+                    log(`Failed to leave session: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                log('Leave session error: ' + err, 'error');
+            }
+        }
+        
+        async function lockPiece() {
+            const pieceId = document.getElementById('pieceId').value;
+            if (!pieceId) return;
+            
+            try {
+                const result = await connection.invoke("LockPiece", pieceId);
+                if (result.success) {
+                    log(`Locked piece: ${pieceId}`, 'success');
+                } else {
+                    log(`Failed to lock piece: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                log('Lock piece error: ' + err, 'error');
+            }
+        }
+        
+        async function unlockPiece() {
+            const pieceId = document.getElementById('pieceId').value;
+            if (!pieceId) return;
+            
+            try {
+                const result = await connection.invoke("UnlockPiece", pieceId);
+                if (result.success) {
+                    log(`Unlocked piece: ${pieceId}`, 'success');
+                } else {
+                    log(`Failed to unlock piece: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                log('Unlock piece error: ' + err, 'error');
+            }
+        }
+        
+        async function movePiece() {
+            const pieceId = document.getElementById('pieceId').value;
+            if (!pieceId) return;
+            
+            const x = Math.random() * 800;
+            const y = Math.random() * 600;
+            const rotation = Math.floor(Math.random() * 4) * 90;
+            
+            try {
+                const result = await connection.invoke("MovePiece", pieceId, x, y, rotation);
+                if (result.success) {
+                    log(`Moved piece ${pieceId} to (${x.toFixed(2)}, ${y.toFixed(2)}) rotation: ${rotation}`, 'success');
+                } else {
+                    log(`Failed to move piece: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                log('Move piece error: ' + err, 'error');
+            }
+        }
+        
+        async function sendChat() {
+            const message = document.getElementById('chatMessage').value;
+            if (!message) return;
+            
+            try {
+                const result = await connection.invoke("SendChatMessage", sessionId, message);
+                if (result.success) {
+                    log(`Sent chat: ${message}`, 'success');
+                    document.getElementById('chatMessage').value = '';
+                } else {
+                    log(`Failed to send chat: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                log('Send chat error: ' + err, 'error');
+            }
+        }
+        
+        async function sendCursor() {
+            const x = Math.random() * 800;
+            const y = Math.random() * 600;
+            
+            try {
+                await connection.send("UpdateCursor", x, y);
+                log(`Sent cursor update: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+            } catch (err) {
+                log('Send cursor error: ' + err, 'error');
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('connect').onclick = connect;
+        document.getElementById('disconnect').onclick = disconnect;
+        document.getElementById('joinSession').onclick = joinSession;
+        document.getElementById('leaveSession').onclick = leaveSession;
+        document.getElementById('lockPiece').onclick = lockPiece;
+        document.getElementById('unlockPiece').onclick = unlockPiece;
+        document.getElementById('movePiece').onclick = movePiece;
+        document.getElementById('sendChat').onclick = sendChat;
+        document.getElementById('sendCursor').onclick = sendCursor;
+        
+        // Enter key support for chat
+        document.getElementById('chatMessage').onkeypress = (e) => {
+            if (e.key === 'Enter' && !document.getElementById('sendChat').disabled) {
+                sendChat();
+            }
+        };
+        
+        log('Test page loaded. Click Connect to start.');
+    </script>
+</body>
+</html>

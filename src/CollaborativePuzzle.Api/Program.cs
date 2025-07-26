@@ -78,6 +78,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles(); // Enable static files for test.html
 app.UseRouting();
 app.UseAuthorization();
 
