@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
 
 namespace CollaborativePuzzle.Api.WebSockets
 {
@@ -185,9 +186,9 @@ namespace CollaborativePuzzle.Api.WebSockets
         private byte[] GenerateBinaryData()
         {
             // Generate some sample binary data
-            var random = new Random();
             var data = new byte[1024];
-            random.NextBytes(data);
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(data);
             
             // Add a header
             var header = BitConverter.GetBytes(DateTime.UtcNow.Ticks);

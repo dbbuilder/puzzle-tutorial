@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Timers;
+using CollaborativePuzzle.Api.Helpers;
 
 namespace CollaborativePuzzle.Api.Mqtt
 {
@@ -10,7 +11,6 @@ namespace CollaborativePuzzle.Api.Mqtt
     {
         private readonly IMqttService _mqttService;
         private readonly ILogger<IoTDeviceSimulator> _logger;
-        private readonly Random _random = new();
         private readonly List<System.Timers.Timer> _timers = new();
         private bool _isRunning;
 
@@ -103,8 +103,8 @@ namespace CollaborativePuzzle.Api.Mqtt
                         pressure = new
                         {
                             zones = GeneratePressureZones(),
-                            totalWeight = _random.Next(0, 1000) / 10.0, // 0-100 grams
-                            activePieces = _random.Next(0, 20)
+                            totalWeight = SecureRandom.Next(0, 1000) / 10.0, // 0-100 grams
+                            activePieces = SecureRandom.Next(0, 20)
                         },
                         touch = new
                         {
@@ -114,7 +114,7 @@ namespace CollaborativePuzzle.Api.Mqtt
                         rfid = new
                         {
                             detectedPieces = GenerateRfidPieces(),
-                            lastScanned = DateTime.UtcNow.AddSeconds(-_random.Next(0, 60))
+                            lastScanned = DateTime.UtcNow.AddSeconds(-SecureRandom.Next(0, 60))
                         }
                     }
                 };
@@ -140,11 +140,11 @@ namespace CollaborativePuzzle.Api.Mqtt
                     timestamp = DateTime.UtcNow,
                     environment = new
                     {
-                        temperature = 20 + _random.Next(-5, 5) + _random.NextDouble(),
-                        humidity = 45 + _random.Next(-10, 10) + _random.NextDouble(),
-                        lightLevel = _random.Next(100, 1000), // lux
-                        noiseLevel = _random.Next(30, 70), // dB
-                        airQuality = _random.Next(50, 150) // AQI
+                        temperature = 20 + SecureRandom.Next(-5, 5) + SecureRandom.NextDouble(),
+                        humidity = 45 + SecureRandom.Next(-10, 10) + SecureRandom.NextDouble(),
+                        lightLevel = SecureRandom.Next(100, 1000), // lux
+                        noiseLevel = SecureRandom.Next(30, 70), // dB
+                        airQuality = SecureRandom.Next(50, 150) // AQI
                     },
                     comfort = new
                     {
@@ -167,8 +167,8 @@ namespace CollaborativePuzzle.Api.Mqtt
 
             try
             {
-                var playerId = $"player-{_random.Next(1, 5):D3}";
-                var isActive = _random.Next(100) > 20; // 80% chance of being active
+                var playerId = $"player-{SecureRandom.Next(1, 5):D3}";
+                var isActive = SecureRandom.Next(100) > 20; // 80% chance of being active
 
                 if (isActive)
                 {
@@ -179,23 +179,23 @@ namespace CollaborativePuzzle.Api.Mqtt
                         player = playerId,
                         vitals = new
                         {
-                            heartRate = 60 + _random.Next(0, 40),
-                            heartRateVariability = _random.Next(20, 60),
-                            stressLevel = _random.Next(1, 10) / 10.0,
-                            focusScore = _random.Next(40, 100) / 100.0
+                            heartRate = 60 + SecureRandom.Next(0, 40),
+                            heartRateVariability = SecureRandom.Next(20, 60),
+                            stressLevel = SecureRandom.Next(1, 10) / 10.0,
+                            focusScore = SecureRandom.Next(40, 100) / 100.0
                         },
                         eyeTracking = new
                         {
-                            gazePoint = new { x = _random.Next(0, 1920), y = _random.Next(0, 1080) },
-                            pupilDilation = 3.0 + _random.NextDouble() * 2,
-                            blinkRate = _random.Next(10, 30),
+                            gazePoint = new { x = SecureRandom.Next(0, 1920), y = SecureRandom.Next(0, 1080) },
+                            pupilDilation = 3.0 + SecureRandom.NextDouble() * 2,
+                            blinkRate = SecureRandom.Next(10, 30),
                             focusArea = DetermineFocusArea()
                         },
                         posture = new
                         {
-                            slouching = _random.Next(100) > 70,
-                            headTilt = _random.Next(-30, 30),
-                            distance = _random.Next(40, 80) // cm from screen
+                            slouching = SecureRandom.Next(100) > 70,
+                            headTilt = SecureRandom.Next(-30, 30),
+                            distance = SecureRandom.Next(40, 80) // cm from screen
                         }
                     };
 
@@ -221,23 +221,23 @@ namespace CollaborativePuzzle.Api.Mqtt
                     timestamp = DateTime.UtcNow,
                     status = new
                     {
-                        isOpen = _random.Next(100) > 50,
-                        batteryLevel = _random.Next(20, 100),
-                        temperature = 25 + _random.NextDouble() * 5,
-                        humidity = 40 + _random.NextDouble() * 20
+                        isOpen = SecureRandom.Next(100) > 50,
+                        batteryLevel = SecureRandom.Next(20, 100),
+                        temperature = 25 + SecureRandom.NextDouble() * 5,
+                        humidity = 40 + SecureRandom.NextDouble() * 20
                     },
                     inventory = new
                     {
                         totalPieces = 1000,
-                        missingPieces = _random.Next(0, 5),
+                        missingPieces = SecureRandom.Next(0, 5),
                         sortedCompartments = 12,
-                        lastInventoryCheck = DateTime.UtcNow.AddHours(-_random.Next(1, 24))
+                        lastInventoryCheck = DateTime.UtcNow.AddHours(-SecureRandom.Next(1, 24))
                     },
                     security = new
                     {
-                        locked = _random.Next(100) > 30,
-                        lastAccess = DateTime.UtcNow.AddMinutes(-_random.Next(0, 120)),
-                        accessedBy = $"user-{_random.Next(1, 10):D3}"
+                        locked = SecureRandom.Next(100) > 30,
+                        lastAccess = DateTime.UtcNow.AddMinutes(-SecureRandom.Next(0, 120)),
+                        accessedBy = $"user-{SecureRandom.Next(1, 10):D3}"
                     }
                 };
 
@@ -255,8 +255,8 @@ namespace CollaborativePuzzle.Api.Mqtt
 
             try
             {
-                var controllerId = $"controller-{_random.Next(1, 3):D3}";
-                var isActive = _random.Next(100) > 40; // 60% chance of being active
+                var controllerId = $"controller-{SecureRandom.Next(1, 3):D3}";
+                var isActive = SecureRandom.Next(100) > 40; // 60% chance of being active
 
                 if (isActive)
                 {
@@ -268,33 +268,33 @@ namespace CollaborativePuzzle.Api.Mqtt
                         {
                             buttons = new
                             {
-                                select = _random.Next(100) > 90,
-                                rotate = _random.Next(100) > 80,
-                                zoom = _random.Next(100) > 85,
-                                menu = _random.Next(100) > 95
+                                select = SecureRandom.Next(100) > 90,
+                                rotate = SecureRandom.Next(100) > 80,
+                                zoom = SecureRandom.Next(100) > 85,
+                                menu = SecureRandom.Next(100) > 95
                             },
                             analog = new
                             {
-                                x = (_random.NextDouble() - 0.5) * 2, // -1 to 1
-                                y = (_random.NextDouble() - 0.5) * 2,
-                                pressure = _random.NextDouble()
+                                x = (SecureRandom.NextDouble() - 0.5) * 2, // -1 to 1
+                                y = (SecureRandom.NextDouble() - 0.5) * 2,
+                                pressure = SecureRandom.NextDouble()
                             },
                             motion = new
                             {
-                                accelerometer = new { x = _random.NextDouble(), y = _random.NextDouble(), z = _random.NextDouble() },
-                                gyroscope = new { pitch = _random.Next(-180, 180), roll = _random.Next(-180, 180), yaw = _random.Next(-180, 180) }
+                                accelerometer = new { x = SecureRandom.NextDouble(), y = SecureRandom.NextDouble(), z = SecureRandom.NextDouble() },
+                                gyroscope = new { pitch = SecureRandom.Next(-180, 180), roll = SecureRandom.Next(-180, 180), yaw = SecureRandom.Next(-180, 180) }
                             }
                         },
                         haptic = new
                         {
                             enabled = true,
-                            intensity = _random.Next(0, 100) / 100.0,
+                            intensity = SecureRandom.Next(0, 100) / 100.0,
                             pattern = SelectHapticPattern()
                         },
                         battery = new
                         {
-                            level = _random.Next(10, 100),
-                            charging = _random.Next(100) > 80
+                            level = SecureRandom.Next(10, 100),
+                            charging = SecureRandom.Next(100) > 80
                         }
                     };
 
@@ -316,8 +316,8 @@ namespace CollaborativePuzzle.Api.Mqtt
                 zones.Add(new
                 {
                     zone = i + 1,
-                    pressure = _random.Next(0, 100) / 100.0,
-                    active = _random.Next(100) > 50
+                    pressure = SecureRandom.Next(0, 100) / 100.0,
+                    active = SecureRandom.Next(100) > 50
                 });
             }
             return zones;
@@ -326,15 +326,15 @@ namespace CollaborativePuzzle.Api.Mqtt
         private object GenerateTouchPoints()
         {
             var points = new List<object>();
-            var touchCount = _random.Next(0, 3);
+            var touchCount = SecureRandom.Next(0, 3);
             for (int i = 0; i < touchCount; i++)
             {
                 points.Add(new
                 {
                     id = i,
-                    x = _random.Next(0, 1000),
-                    y = _random.Next(0, 1000),
-                    pressure = _random.NextDouble()
+                    x = SecureRandom.Next(0, 1000),
+                    y = SecureRandom.Next(0, 1000),
+                    pressure = SecureRandom.NextDouble()
                 });
             }
             return points;
@@ -343,21 +343,21 @@ namespace CollaborativePuzzle.Api.Mqtt
         private string DetectGestures()
         {
             var gestures = new[] { "none", "swipe", "pinch", "rotate", "tap", "hold" };
-            return gestures[_random.Next(gestures.Length)];
+            return gestures[SecureRandom.Next(gestures.Length)];
         }
 
         private object GenerateRfidPieces()
         {
             var pieces = new List<object>();
-            var count = _random.Next(0, 10);
+            var count = SecureRandom.Next(0, 10);
             for (int i = 0; i < count; i++)
             {
                 pieces.Add(new
                 {
-                    pieceId = $"piece-{_random.Next(1000, 9999)}",
-                    position = new { x = _random.Next(0, 100), y = _random.Next(0, 100) },
-                    orientation = _random.Next(0, 360),
-                    lastMoved = DateTime.UtcNow.AddSeconds(-_random.Next(0, 300))
+                    pieceId = $"piece-{SecureRandom.Next(1000, 9999)}",
+                    position = new { x = SecureRandom.Next(0, 100), y = SecureRandom.Next(0, 100) },
+                    orientation = SecureRandom.Next(0, 360),
+                    lastMoved = DateTime.UtcNow.AddSeconds(-SecureRandom.Next(0, 300))
                 });
             }
             return pieces;
@@ -366,9 +366,9 @@ namespace CollaborativePuzzle.Api.Mqtt
         private double CalculateComfortIndex()
         {
             // Simple comfort index based on temperature, humidity, noise
-            var tempScore = 1.0 - Math.Abs(22 - (20 + _random.Next(-5, 5))) / 10.0;
-            var humidityScore = 1.0 - Math.Abs(50 - (45 + _random.Next(-10, 10))) / 50.0;
-            var noiseScore = 1.0 - (_random.Next(30, 70) - 30) / 40.0;
+            var tempScore = 1.0 - Math.Abs(22 - (20 + SecureRandom.Next(-5, 5))) / 10.0;
+            var humidityScore = 1.0 - Math.Abs(50 - (45 + SecureRandom.Next(-10, 10))) / 50.0;
+            var noiseScore = 1.0 - (SecureRandom.Next(30, 70) - 30) / 40.0;
             
             return Math.Round((tempScore + humidityScore + noiseScore) / 3 * 100) / 100;
         }
@@ -377,11 +377,11 @@ namespace CollaborativePuzzle.Api.Mqtt
         {
             var recommendations = new List<string>();
             
-            if (_random.Next(100) > 70)
+            if (SecureRandom.Next(100) > 70)
                 recommendations.Add("Adjust room temperature");
-            if (_random.Next(100) > 80)
+            if (SecureRandom.Next(100) > 80)
                 recommendations.Add("Increase lighting");
-            if (_random.Next(100) > 60)
+            if (SecureRandom.Next(100) > 60)
                 recommendations.Add("Reduce noise levels");
             
             return recommendations;
@@ -390,13 +390,13 @@ namespace CollaborativePuzzle.Api.Mqtt
         private string DetermineFocusArea()
         {
             var areas = new[] { "center", "top-left", "top-right", "bottom-left", "bottom-right", "edge", "scanning" };
-            return areas[_random.Next(areas.Length)];
+            return areas[SecureRandom.Next(areas.Length)];
         }
 
         private string SelectHapticPattern()
         {
             var patterns = new[] { "click", "vibrate", "pulse", "wave", "knock" };
-            return patterns[_random.Next(patterns.Length)];
+            return patterns[SecureRandom.Next(patterns.Length)];
         }
 
         public void Dispose()
