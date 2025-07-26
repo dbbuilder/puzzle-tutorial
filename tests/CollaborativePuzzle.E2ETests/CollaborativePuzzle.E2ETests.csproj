@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -8,20 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <PackageReference Include="Testcontainers" />
-    <PackageReference Include="Testcontainers.MsSql" />
-    <PackageReference Include="Testcontainers.Redis" />
+    <PackageReference Include="Microsoft.Playwright" />
     <PackageReference Include="FluentAssertions" />
-    <PackageReference Include="Respawn" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\CollaborativePuzzle.Api\CollaborativePuzzle.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
