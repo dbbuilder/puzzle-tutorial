@@ -86,18 +86,18 @@ namespace CollaborativePuzzle.Infrastructure.Repositories
 
     public class MinimalUserRepository : IUserRepository
     {
-        public Task<User?> GetUserAsync(Guid userId) => Task.FromResult<User?>(null);
-        public Task<User?> GetUserByUsernameAsync(string username) => Task.FromResult<User?>(null);
-        public Task<User?> GetUserByEmailAsync(string email) => Task.FromResult<User?>(null);
-        public Task<User> CreateUserAsync(User user) => Task.FromResult(user);
-        public Task<bool> UpdateUserAsync(User user) => Task.FromResult(false);
+        public Task<Core.Entities.User?> GetUserAsync(Guid userId) => Task.FromResult<Core.Entities.User?>(null);
+        public Task<Core.Entities.User?> GetUserByUsernameAsync(string username) => Task.FromResult<Core.Entities.User?>(null);
+        public Task<Core.Entities.User?> GetUserByEmailAsync(string email) => Task.FromResult<Core.Entities.User?>(null);
+        public Task<Core.Entities.User> CreateUserAsync(Core.Entities.User user) => Task.FromResult(user);
+        public Task<bool> UpdateUserAsync(Core.Entities.User user) => Task.FromResult(false);
         public Task<bool> DeleteUserAsync(Guid userId) => Task.FromResult(false);
         public Task<bool> UpdateUserProfileAsync(Guid userId, string displayName, string? avatarUrl) => Task.FromResult(false);
         public Task<bool> UpdateUserStatsAsync(Guid userId, UserStats stats) => Task.FromResult(false);
         public Task<UserStats?> GetUserStatsAsync(Guid userId) => Task.FromResult<UserStats?>(null);
-        public Task<IEnumerable<User>> GetActiveUsersAsync(int limit = 100) => Task.FromResult<IEnumerable<User>>(Array.Empty<User>());
+        public Task<IEnumerable<Core.Entities.User>> GetActiveUsersAsync(int limit = 100) => Task.FromResult<IEnumerable<Core.Entities.User>>(Array.Empty<Core.Entities.User>());
         public Task<bool> UpdateLastActiveAsync(Guid userId) => Task.FromResult(false);
-        public Task<User?> AuthenticateAsync(string username, string passwordHash) => Task.FromResult<User?>(null);
+        public Task<Core.Entities.User?> AuthenticateAsync(string username, string passwordHash) => Task.FromResult<Core.Entities.User?>(null);
         public Task<bool> UpdatePasswordAsync(Guid userId, string newPasswordHash) => Task.FromResult(false);
     }
 }

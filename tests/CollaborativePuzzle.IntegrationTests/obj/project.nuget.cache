@@ -1,28 +1,9 @@
 {
   "version": 2,
-  "dgSpecHash": "/iXPjv7uEggrrvDZF+SMwxHLL6Fub+XGie/3dSbAqV5fz7rTYpz34UojA+0Z9fy82fM7pzGeuBEHFN8bpCfC0w==",
-  "success": true,
+  "dgSpecHash": "EQA8rF6PgoNNTM3wgEZgeip2Lh1e/RSvGBe8r0ziv6HMPAbopbP55eAo7ekEGLgxr5S1MFnQgPqHJ02uhMHGmQ==",
+  "success": false,
   "projectFilePath": "/mnt/d/dev2/puzzletutorial/tests/CollaborativePuzzle.IntegrationTests/CollaborativePuzzle.IntegrationTests.csproj",
   "expectedPackageFiles": [
-    "/home/ted/.nuget/packages/coverlet.collector/6.0.2/coverlet.collector.6.0.2.nupkg.sha512",
-    "/home/ted/.nuget/packages/microsoft.codeanalysis.netanalyzers/8.0.0/microsoft.codeanalysis.netanalyzers.8.0.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/microsoft.codecoverage/17.12.0/microsoft.codecoverage.17.12.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/microsoft.net.test.sdk/17.12.0/microsoft.net.test.sdk.17.12.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/microsoft.testplatform.objectmodel/17.12.0/microsoft.testplatform.objectmodel.17.12.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/microsoft.testplatform.testhost/17.12.0/microsoft.testplatform.testhost.17.12.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/newtonsoft.json/13.0.1/newtonsoft.json.13.0.1.nupkg.sha512",
-    "/home/ted/.nuget/packages/sonaranalyzer.csharp/9.32.0.97167/sonaranalyzer.csharp.9.32.0.97167.nupkg.sha512",
-    "/home/ted/.nuget/packages/stylecop.analyzers/1.2.0-beta.556/stylecop.analyzers.1.2.0-beta.556.nupkg.sha512",
-    "/home/ted/.nuget/packages/stylecop.analyzers.unstable/1.2.0.556/stylecop.analyzers.unstable.1.2.0.556.nupkg.sha512",
-    "/home/ted/.nuget/packages/system.reflection.metadata/1.6.0/system.reflection.metadata.1.6.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit/2.9.2/xunit.2.9.2.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit.abstractions/2.0.3/xunit.abstractions.2.0.3.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit.analyzers/1.16.0/xunit.analyzers.1.16.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit.assert/2.9.2/xunit.assert.2.9.2.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit.core/2.9.2/xunit.core.2.9.2.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit.extensibility.core/2.9.2/xunit.extensibility.core.2.9.2.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit.extensibility.execution/2.9.2/xunit.extensibility.execution.2.9.2.nupkg.sha512",
-    "/home/ted/.nuget/packages/xunit.runner.visualstudio/2.8.2/xunit.runner.visualstudio.2.8.2.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.netcore.app.runtime.win-x64/8.0.17/microsoft.netcore.app.runtime.win-x64.8.0.17.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.netcore.app.runtime.linux-x64/8.0.17/microsoft.netcore.app.runtime.linux-x64.8.0.17.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.netcore.app.runtime.linux-arm64/8.0.17/microsoft.netcore.app.runtime.linux-arm64.8.0.17.nupkg.sha512",
@@ -33,5 +14,11 @@
     "/home/ted/.nuget/packages/microsoft.netcore.app.host.linux-x64/8.0.17/microsoft.netcore.app.host.linux-x64.8.0.17.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.netcore.app.host.linux-arm64/8.0.17/microsoft.netcore.app.host.linux-arm64.8.0.17.nupkg.sha512"
   ],
-  "logs": []
+  "logs": [
+    {
+      "code": "NU1010",
+      "level": "Error",
+      "message": "The PackageReference items Respawn do not have corresponding PackageVersion."
+    }
+  ]
 }
