@@ -1,9 +1,61 @@
-# README.md
-## Collaborative Jigsaw Puzzle Platform
+# Collaborative Jigsaw Puzzle Platform
+
+## 📚 Interactive Learning Guide
+
+**New to the project? Start with our interactive documentation viewer!**
+
+🚀 **[View the Interactive Learning Guide](https://dbbuilder.github.io/puzzle-tutorial/github-learning-guide.html)**
+
+Our comprehensive learning guide provides:
+- ✅ Auto-discovered documentation from this repository
+- ✅ Embedded learning resources and implementation checklists
+- ✅ Complete bibliography with links to official docs
+- ✅ Enterprise architecture patterns with code examples
+- ✅ Step-by-step deployment guides
+- ✅ 850+ lines of production-ready code samples
+
+**No installation required** - just open in your browser and start learning!
+
+---
+
+## 🧩 Project Overview
 
 A real-time collaborative jigsaw puzzle application built with ASP.NET Core, SignalR, WebRTC, Redis, and Vue.js. Multiple users can simultaneously work on digital puzzles with live synchronization, voice chat, and persistent state management.
 
-## Architecture Overview
+This project serves as a comprehensive example of building enterprise-grade applications with modern technologies, demonstrating:
+- Microservices architecture
+- Real-time communication at scale
+- Cloud-native deployment
+- Enterprise design patterns
+- Production monitoring and observability
+
+## 🎯 Learning Objectives
+
+By studying this project, you'll learn:
+
+1. **System Architecture**
+   - Designing scalable microservices
+   - Implementing real-time features with SignalR and WebSockets
+   - Managing distributed state with Redis
+
+2. **Cloud Technologies**
+   - Azure service integration (AKS, SQL, Redis, Blob Storage)
+   - Kubernetes deployment and orchestration
+   - Infrastructure as Code practices
+
+3. **Modern Development**
+   - ASP.NET Core 8.0 with Minimal APIs
+   - Vue.js 3 with TypeScript
+   - Docker containerization
+   - CI/CD pipelines
+
+4. **Enterprise Practices**
+   - Security implementation (JWT, Azure AD B2C)
+   - Performance optimization
+   - Monitoring with Application Insights
+   - Production deployment strategies
+
+## 🏗️ Architecture Overview
 
 ### System Components
 - **API Gateway**: ASP.NET Core Minimal APIs with OpenAPI documentation
@@ -42,7 +94,7 @@ A real-time collaborative jigsaw puzzle application built with ASP.NET Core, Sig
 - Azure Key Vault for secret management
 - Azure Application Insights for monitoring
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 - .NET 8.0 SDK
@@ -140,7 +192,24 @@ docker-compose -f docker-compose.dev.yml up --build
 # Swagger: https://localhost:5001/swagger
 ```
 
-## Configuration
+## 📖 Documentation
+
+### Comprehensive Guides
+- **[Interactive Learning Guide](https://dbbuilder.github.io/puzzle-tutorial/github-learning-guide.html)** - Start here!
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md) - System design and components
+- [Enterprise Patterns](docs/ENTERPRISE_PATTERNS.md) - Design patterns with examples
+- [Code Samples](docs/CODE_SAMPLES.md) - 850+ lines of production code
+- [Production Deployment](docs/PRODUCTION_DEPLOYMENT.md) - Complete Azure deployment
+- [Monitoring & Observability](docs/MONITORING_OBSERVABILITY.md) - Logging and metrics
+
+### Technology Guides
+- [SignalR & Redis Guide](docs/SIGNALR_REDIS_GUIDE.md) - Real-time communication
+- [WebRTC Guide](docs/WEBRTC_GUIDE.md) - Voice chat implementation
+- [Kubernetes Architecture](docs/KUBERNETES_ARCHITECTURE.md) - Container orchestration
+- [Configuration Guide](docs/CONFIGURATION_FILES_GUIDE.md) - Settings management
+- [TDD Guide](docs/TDD_GUIDE.md) - Test-driven development
+
+## 🔧 Configuration
 
 ### Required Configuration (appsettings.json)
 ```json
@@ -180,7 +249,7 @@ docker-compose -f docker-compose.dev.yml up --build
 - `BlobStorageConnectionString`: Azure Blob Storage connection string
 - `TurnServerCredentials`: WebRTC TURN server authentication
 
-## API Documentation
+## 📡 API Documentation
 
 ### Core Endpoints
 
@@ -221,7 +290,7 @@ docker-compose -f docker-compose.dev.yml up --build
 - `CursorUpdate` - User cursor position update
 - `PuzzleCompleted` - Puzzle completion notification
 
-## Database Schema
+## 💾 Database Schema
 
 ### Core Tables
 - `Puzzles` - Puzzle metadata and configuration
@@ -238,7 +307,7 @@ docker-compose -f docker-compose.dev.yml up --build
 - `sp_GetSessionParticipants` - Get all users in session
 - `sp_SaveChatMessage` - Store chat message with metadata
 
-## Deployment
+## 🚢 Deployment
 
 ### Azure Kubernetes Service
 
@@ -263,7 +332,7 @@ kubectl apply -f k8s/
 - Azure Container Registry (ACR)
 - Azure Application Insights
 
-## Monitoring and Logging
+## 📊 Monitoring and Logging
 
 ### Application Insights Integration
 - Request/response tracking
@@ -286,7 +355,7 @@ kubectl apply -f k8s/
 - SignalR hub health
 - WebRTC TURN server availability
 
-## Testing
+## 🧪 Testing
 
 ### Unit Tests
 ```bash
@@ -307,7 +376,7 @@ npm run test:unit
 npm run test:e2e
 ```
 
-## Performance Considerations
+## ⚡ Performance Considerations
 
 ### Optimization Strategies
 - Redis caching for frequent puzzle data access
@@ -322,7 +391,7 @@ npm run test:e2e
 - Database read replicas for improved query performance
 - Azure Front Door for global content distribution
 
-## Security
+## 🔒 Security
 
 ### Authentication and Authorization
 - Azure Active Directory B2C integration
@@ -342,7 +411,7 @@ npm run test:e2e
 - SQL injection prevention with parameterized procedures
 - XSS protection through proper encoding
 
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -357,13 +426,16 @@ npm run test:e2e
 - Write unit tests for all business logic
 - Document public APIs with XML comments
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## 💬 Support
 
-For questions and support, please open an issue in the GitHub repository or contact the development team.
+For questions and support:
+- Start with the **[Interactive Learning Guide](https://dbbuilder.github.io/puzzle-tutorial/github-learning-guide.html)**
+- Open an issue in the GitHub repository
+- Check the comprehensive documentation in the `/docs` folder
 
 ### Useful Links
 - [ASP.NET Core Documentation](https://docs.microsoft.com/aspnet/core)
