@@ -3,8 +3,6 @@
 # Test: docker-compose -f docker-compose.tier1-redis.yml up
 # Verify: redis-cli -h localhost -p 6379 ping
 
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine

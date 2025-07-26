@@ -3,8 +3,6 @@
 # Test: docker-compose -f docker-compose.tier3-api.yml up
 # Verify: http://localhost:5000/health
 
-version: '3.8'
-
 services:
   # Redis Cache
   redis:
