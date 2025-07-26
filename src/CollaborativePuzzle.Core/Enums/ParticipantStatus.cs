@@ -6,9 +6,19 @@ namespace CollaborativePuzzle.Core.Enums
     public enum ParticipantStatus
     {
         /// <summary>
+        /// Default/unknown status
+        /// </summary>
+        None = 0,
+        
+        /// <summary>
         /// Participant is actively connected and engaged with the puzzle
         /// </summary>
         Online = 1,
+        
+        /// <summary>
+        /// Participant is active (alias for Online)
+        /// </summary>
+        Active = 1,
         
         /// <summary>
         /// Participant is connected but inactive for a period of time

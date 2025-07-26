@@ -31,16 +31,16 @@ namespace CollaborativePuzzle.Core.Entities
         public int? ViewportWidth { get; set; }
         public int? ViewportHeight { get; set; }
         public float? ZoomLevel { get; set; } = 1.0f;
-        
+
         // Voice chat participation
-        public bool IsVoiceChatActive { get; set; } = false;
-        public bool IsMuted { get; set; } = false;
-        public bool IsDeafened { get; set; } = false;
-        
+        public bool IsVoiceChatActive { get; set; }
+        public bool IsMuted { get; set; }
+        public bool IsDeafened { get; set; }
+
         // Participation tracking
         public int PiecesPlaced { get; set; } = 0;
-        public int PiecesMoved { get; set; } = 0;
-        public int MessagesPosted { get; set; } = 0;
+        public int PiecesMoved { get; set; }
+        public int MessagesPosted { get; set; }
         public TimeSpan TotalActiveTime { get; set; } = TimeSpan.Zero;
         
         // Connection information
@@ -63,8 +63,8 @@ namespace CollaborativePuzzle.Core.Entities
         public bool CanMovePieces { get; set; } = true;
         public bool CanChat { get; set; } = true;
         public bool CanUseVoiceChat { get; set; } = true;
-        public bool CanInviteOthers { get; set; } = false;
-        
+        public bool CanInviteOthers { get; set; }
+
         // Version for optimistic concurrency control
         [Timestamp]
         public byte[]? RowVersion { get; set; }

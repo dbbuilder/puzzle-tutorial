@@ -29,18 +29,18 @@ namespace CollaborativePuzzle.Core.Entities
         
         // Message threading support
         public Guid? ReplyToMessageId { get; set; }
-        
+
         // Message reactions and interactions
-        public int LikeCount { get; set; } = 0;
-        public bool IsPinned { get; set; } = false;
-        public bool IsEdited { get; set; } = false;
-        
+        public int LikeCount { get; set; }
+        public bool IsPinned { get; set; }
+        public bool IsEdited { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime? EditedAt { get; set; }
-        
+
         // Moderation flags
-        public bool IsDeleted { get; set; } = false;
-        public bool IsHidden { get; set; } = false;
+        public bool IsDeleted { get; set; }
+        public bool IsHidden { get; set; }
         public Guid? DeletedByUserId { get; set; }
         public DateTime? DeletedAt { get; set; }
         public string? DeletionReason { get; set; }
@@ -48,10 +48,10 @@ namespace CollaborativePuzzle.Core.Entities
         // Message formatting and content
         [MaxLength(50)]
         public string? Language { get; set; }
-        
-        public bool ContainsMention { get; set; } = false;
-        public bool ContainsLink { get; set; } = false;
-        
+
+        public bool ContainsMention { get; set; }
+        public bool ContainsLink { get; set; }
+
         // Navigation properties
         public virtual PuzzleSession Session { get; set; } = null!;
         public virtual User User { get; set; } = null!;

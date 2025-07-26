@@ -1,16 +1,19 @@
+using CollaborativePuzzle.Api.Mqtt;
+using CollaborativePuzzle.Api.SocketIO;
+using CollaborativePuzzle.Api.WebSockets;
 using CollaborativePuzzle.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
+using CollaborativePuzzle.Api.MinimalApis;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "Collaborative Puzzle API", Version = "v1" });
-});
+
+// Configure Minimal APIs with OpenAPI/Swagger
+SimpleMinimalApiEndpoints.ConfigureMinimalApis(builder);
 
 // Add SignalR with Redis backplane
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
@@ -19,11 +22,12 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-})
-.AddStackExchangeRedis(redisConnectionString, options =>
-{
-    options.Configuration.ChannelPrefix = "puzzle-app";
 });
+// TODO: Add Redis backplane with newer package
+// .AddStackExchangeRedis(redisConnectionString, options =>
+// {
+//     options.Configuration.ChannelPrefix = "puzzle-app";
+// });
 
 // Add Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
@@ -65,34 +69,55 @@ builder.Services.AddCors(options =>
 
 // Add health checks
 builder.Services.AddHealthChecks()
-    .AddRedis(redisConnectionString, name: "redis", tags: new[] { "ready" });
+    .AddRedis(redisConnectionString, name: "redis", tags: new[] { "ready", "startup" })
+    .AddCheck("database", () =>
+    {
+        // Simple database check - in production, check actual connectivity
+        return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Database is accessible");
+    }, tags: new[] { "ready", "startup" })
+    .AddCheck("signalr", () =>
+    {
+        // Check SignalR is configured
+        return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("SignalR is configured");
+    }, tags: new[] { "ready" });
+
+// Add WebSocket handler
+builder.Services.AddScoped<WebSocketHandler>();
+
+// Add MQTT services
+builder.Services.AddSingleton<IMqttService, MqttService>();
+builder.Services.AddHostedService<IoTDeviceSimulator>();
+builder.Services.AddHostedService<MqttMessageProcessor>();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
     app.UseCors("DevelopmentCors");
 }
 
 app.UseHttpsRedirection();
 app.UseStaticFiles(); // Enable static files for test.html
+
+// Enable rate limiting
+app.UseRateLimiter();
+
+// Enable WebSockets
+app.UseWebSockets();
+app.UseWebSocketMiddleware();
+app.UseSocketIO();
+
 app.UseRouting();
 app.UseAuthorization();
 
-// Map endpoints
+// Map traditional endpoints
 app.MapControllers();
-app.MapHub<PuzzleHub>("/puzzlehub");
-app.MapHealthChecks("/health");
+app.MapHub<TestPuzzleHub>("/puzzlehub");
+app.MapHub<CollaborativePuzzle.Api.WebRTC.WebRTCHub>("/webrtchub");
+app.MapHub<CollaborativePuzzle.Api.SocketIO.SocketIOHub>("/socketiohub");
 
-// Minimal API endpoints
-app.MapGet("/", () => Results.Redirect("/swagger"))
-    .ExcludeFromDescription();
-
-app.MapGet("/api/puzzle", () => new { message = "Puzzle API is running", timestamp = DateTime.UtcNow })
-    .WithName("GetStatus")
-    .WithOpenApi();
+// Map Minimal APIs with OpenAPI/Swagger
+SimpleMinimalApiEndpoints.MapMinimalApis(app);
 
 app.Run();

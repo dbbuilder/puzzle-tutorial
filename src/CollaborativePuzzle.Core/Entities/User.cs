@@ -33,8 +33,8 @@ namespace CollaborativePuzzle.Core.Entities
         public string? Provider { get; set; }
         
         public bool IsActive { get; set; } = true;
-        public bool IsEmailVerified { get; set; } = false;
-        
+        public bool IsEmailVerified { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime LastActiveAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
@@ -43,11 +43,11 @@ namespace CollaborativePuzzle.Core.Entities
         public bool AllowVoiceChat { get; set; } = true;
         public bool AllowNotifications { get; set; } = true;
         public string? PreferredLanguage { get; set; } = "en";
-        
+
         // Statistics
-        public int TotalPuzzlesCreated { get; set; } = 0;
-        public int TotalPuzzlesCompleted { get; set; } = 0;
-        public int TotalSessionsJoined { get; set; } = 0;
+        public int TotalPuzzlesCreated { get; set; }
+        public int TotalPuzzlesCompleted { get; set; }
+        public int TotalSessionsJoined { get; set; }
         public TimeSpan TotalActiveTime { get; set; } = TimeSpan.Zero;
         
         // Navigation properties

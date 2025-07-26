@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: puzzle-platform
+  labels:
+    app: collaborative-puzzle
+    environment: base

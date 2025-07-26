@@ -5,6 +5,7 @@ using Dapper;
 using CollaborativePuzzle.Core.Interfaces;
 using CollaborativePuzzle.Core.Entities;
 using CollaborativePuzzle.Core.Models;
+using CollaborativePuzzle.Core.Enums;
 
 namespace CollaborativePuzzle.Infrastructure.Repositories
 {
@@ -73,7 +74,7 @@ namespace CollaborativePuzzle.Infrastructure.Repositories
                     }
 
                     // Insert puzzle pieces in batches
-                    await InsertPuzzlePiecesAsync(connection, transaction, puzzleId, pieces);
+                    await InsertPuzzlePiecesAsync(connection, (SqlTransaction)transaction, puzzleId, pieces);
 
                     await transaction.CommitAsync();
 

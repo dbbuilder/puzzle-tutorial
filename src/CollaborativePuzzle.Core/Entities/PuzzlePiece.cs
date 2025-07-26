@@ -27,10 +27,10 @@ namespace CollaborativePuzzle.Core.Entities
         // Current position in puzzle session (pixel coordinates)
         public int CurrentX { get; set; }
         public int CurrentY { get; set; }
-        
+
         // Rotation angle (0, 90, 180, 270 degrees)
-        public int Rotation { get; set; } = 0;
-        
+        public int Rotation { get; set; }
+
         // Shape definition as JSON string containing SVG path data
         [Required]
         public string ShapeData { get; set; } = string.Empty;
@@ -40,14 +40,14 @@ namespace CollaborativePuzzle.Core.Entities
         public int ImageY { get; set; }
         public int ImageWidth { get; set; }
         public int ImageHeight { get; set; }
-        
+
         // Indicates if piece is correctly placed
-        public bool IsPlaced { get; set; } = false;
-        
+        public bool IsPlaced { get; set; }
+
         // Indicates if piece is an edge or corner piece
         public bool IsEdgePiece { get; set; } = false;
-        public bool IsCornerPiece { get; set; } = false;
-        
+        public bool IsCornerPiece { get; set; }
+
         // Locking mechanism for collaborative editing
         public Guid? LockedByUserId { get; set; }
         public DateTime? LockedAt { get; set; }

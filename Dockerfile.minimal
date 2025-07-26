@@ -1,0 +1,37 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Copy only the minimal files needed
+COPY Directory.*.props .
+COPY *.sln .
+COPY src/CollaborativePuzzle.Core/CollaborativePuzzle.Core.csproj src/CollaborativePuzzle.Core/
+COPY src/CollaborativePuzzle.Infrastructure/CollaborativePuzzle.Infrastructure.csproj src/CollaborativePuzzle.Infrastructure/
+COPY src/CollaborativePuzzle.Hubs/CollaborativePuzzle.Hubs.csproj src/CollaborativePuzzle.Hubs/
+COPY src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj src/CollaborativePuzzle.Api/
+
+# Restore dependencies
+RUN dotnet restore src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj
+
+# Copy source code
+COPY src/ src/
+
+# Build the API project
+RUN dotnet build src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj -c Release --no-restore
+
+# Publish
+RUN dotnet publish src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj -c Release -o /app/publish --no-build
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+WORKDIR /app
+COPY --from=build /app/publish .
+
+# Create wwwroot directory
+RUN mkdir -p wwwroot
+
+# Copy static files
+COPY src/CollaborativePuzzle.Api/wwwroot wwwroot/
+
+EXPOSE 80
+ENTRYPOINT ["dotnet", "CollaborativePuzzle.Api.dll"]

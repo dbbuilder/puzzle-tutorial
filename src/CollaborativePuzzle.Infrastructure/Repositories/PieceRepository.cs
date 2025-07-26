@@ -453,10 +453,9 @@ namespace CollaborativePuzzle.Infrastructure.Repositories
             return false;
         }
         
-        public async Task<bool> UnlockAllPiecesForUserAsync(Guid userId)
+        public Task<int> UnlockAllPiecesForUserAsync(Guid userId)
         {
-            var count = await UnlockAllPiecesByUserAsync(userId);
-            return count > 0;
+            return UnlockAllPiecesByUserAsync(userId);
         }
         
         public Task<IEnumerable<PuzzlePiece>> GetLockedPiecesAsync(Guid puzzleId)
@@ -469,6 +468,36 @@ namespace CollaborativePuzzle.Infrastructure.Repositories
         {
             // This would need a new stored procedure
             return Task.FromResult(false);
+        }
+
+        public Task<bool> MarkPieceAsPlacedAsync(Guid pieceId)
+        {
+            // This would need a new stored procedure to mark piece as placed
+            return Task.FromResult(false);
+        }
+
+        public Task<int> GetPlacedPieceCountAsync(Guid puzzleId)
+        {
+            // This would need a new stored procedure to count placed pieces
+            return Task.FromResult(0);
+        }
+
+        public Task<int> GetTotalPieceCountAsync(Guid puzzleId)
+        {
+            // This would need a new stored procedure to count total pieces
+            return Task.FromResult(100); // Default puzzle size
+        }
+
+        public Task<bool> CreatePiecesAsync(IEnumerable<PuzzlePiece> pieces)
+        {
+            // This would need a new stored procedure to batch create pieces
+            return Task.FromResult(true);
+        }
+
+        public Task<int> DeletePuzzlePiecesAsync(Guid puzzleId)
+        {
+            // This would need a new stored procedure to delete all pieces for a puzzle
+            return Task.FromResult(0);
         }
     }
 }

@@ -28,7 +28,7 @@ namespace CollaborativePuzzle.Core.Models
         public bool IsVoiceChatEnabled { get; set; } = true;
         public bool IsPublic { get; set; } = true;
         public bool AllowPieceRotation { get; set; } = true;
-        public bool ShowPieceOutlines { get; set; } = false;
+        public bool ShowPieceOutlines { get; set; }
         public bool EnableSnapToGrid { get; set; } = true;
         
         [Range(5, 100)]

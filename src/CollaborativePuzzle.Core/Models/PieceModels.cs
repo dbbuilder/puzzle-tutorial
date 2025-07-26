@@ -38,7 +38,7 @@ namespace CollaborativePuzzle.Core.Models
         public Guid PieceId { get; set; }
         public int X { get; set; }
         public int Y { get; set; }
-        public int Rotation { get; set; } = 0;
+        public int Rotation { get; set; }
         public bool CheckPlacement { get; set; } = true;
     }
     

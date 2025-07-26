@@ -1,8 +1,22 @@
 {
   "version": 2,
-  "dgSpecHash": "qvfviXWOhqA=",
+  "dgSpecHash": "STfXEYic4Ts3dzlR1KSP4x5LnxHRGrZpX3BpGo54zyzzfA0wZYTFAG/xN5lUdFZ9iOT7ExsnRUZe+0mAq8tcYw==",
   "success": true,
-  "projectFilePath": "D:\\dev2\\puzzletutorial\\src\\CollaborativePuzzle.Core\\CollaborativePuzzle.Core.csproj",
-  "expectedPackageFiles": [],
+  "projectFilePath": "/mnt/d/dev2/puzzletutorial/src/CollaborativePuzzle.Core/CollaborativePuzzle.Core.csproj",
+  "expectedPackageFiles": [
+    "/home/ted/.nuget/packages/microsoft.codeanalysis.netanalyzers/8.0.0/microsoft.codeanalysis.netanalyzers.8.0.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/sonaranalyzer.csharp/9.32.0.97167/sonaranalyzer.csharp.9.32.0.97167.nupkg.sha512",
+    "/home/ted/.nuget/packages/stylecop.analyzers/1.2.0-beta.556/stylecop.analyzers.1.2.0-beta.556.nupkg.sha512",
+    "/home/ted/.nuget/packages/stylecop.analyzers.unstable/1.2.0.556/stylecop.analyzers.unstable.1.2.0.556.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.netcore.app.runtime.win-x64/8.0.17/microsoft.netcore.app.runtime.win-x64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.netcore.app.runtime.linux-x64/8.0.17/microsoft.netcore.app.runtime.linux-x64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.netcore.app.runtime.linux-arm64/8.0.17/microsoft.netcore.app.runtime.linux-arm64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.aspnetcore.app.runtime.win-x64/8.0.17/microsoft.aspnetcore.app.runtime.win-x64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.aspnetcore.app.runtime.linux-x64/8.0.17/microsoft.aspnetcore.app.runtime.linux-x64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.aspnetcore.app.runtime.linux-arm64/8.0.17/microsoft.aspnetcore.app.runtime.linux-arm64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.netcore.app.host.win-x64/8.0.17/microsoft.netcore.app.host.win-x64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.netcore.app.host.linux-x64/8.0.17/microsoft.netcore.app.host.linux-x64.8.0.17.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.netcore.app.host.linux-arm64/8.0.17/microsoft.netcore.app.host.linux-arm64.8.0.17.nupkg.sha512"
+  ],
   "logs": []
 }

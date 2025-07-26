@@ -1,4 +1,5 @@
 using System;
+using CollaborativePuzzle.Core.Enums;
 
 namespace CollaborativePuzzle.Core.Models
 {
@@ -48,6 +49,11 @@ namespace CollaborativePuzzle.Core.Models
         /// Gets or sets the current session state.
         /// </summary>
         public SessionStateDto? SessionState { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the user ID who joined.
+        /// </summary>
+        public Guid UserId { get; set; }
     }
     
     /// <summary>
@@ -69,6 +75,11 @@ namespace CollaborativePuzzle.Core.Models
         /// Gets or sets whether the piece is now correctly placed.
         /// </summary>
         public bool IsPlaced { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the overall puzzle completion percentage.
+        /// </summary>
+        public decimal CompletionPercentage { get; set; }
     }
     
     /// <summary>
@@ -199,6 +210,11 @@ namespace CollaborativePuzzle.Core.Models
         /// Gets or sets when the piece was moved.
         /// </summary>
         public DateTime MovedAt { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the timestamp (alias for MovedAt).
+        /// </summary>
+        public DateTime Timestamp => MovedAt;
     }
     
     /// <summary>
@@ -259,6 +275,16 @@ namespace CollaborativePuzzle.Core.Models
         public string UserId { get; set; } = string.Empty;
         
         /// <summary>
+        /// Gets or sets the sender ID (alias for UserId).
+        /// </summary>
+        public string SenderId => UserId;
+        
+        /// <summary>
+        /// Gets or sets the sender's display name.
+        /// </summary>
+        public string SenderName { get; set; } = string.Empty;
+        
+        /// <summary>
         /// Gets or sets the user's display name.
         /// </summary>
         public string DisplayName { get; set; } = string.Empty;
@@ -272,6 +298,16 @@ namespace CollaborativePuzzle.Core.Models
         /// Gets or sets when the message was sent.
         /// </summary>
         public DateTime SentAt { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the timestamp (alias for SentAt).
+        /// </summary>
+        public DateTime Timestamp => SentAt;
+        
+        /// <summary>
+        /// Gets or sets the message type.
+        /// </summary>
+        public MessageType MessageType { get; set; } = MessageType.Text;
     }
     
     /// <summary>
@@ -293,6 +329,11 @@ namespace CollaborativePuzzle.Core.Models
         /// Gets or sets the cursor Y position.
         /// </summary>
         public double Y { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the timestamp of the update.
+        /// </summary>
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
     
     /// <summary>

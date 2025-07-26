@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT IoT Dashboard - Collaborative Puzzle</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #0f0f0f;
+            color: #e0e0e0;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .widget {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .widget h3 {
+            margin-top: 0;
+            color: #4caf50;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #666;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.active {
+            background: #4caf50;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .metric:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .metric-value.warning {
+            color: #ff9800;
+        }
+        
+        .metric-value.danger {
+            color: #f44336;
+        }
+        
+        .metric-value.good {
+            color: #4caf50;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #4caf50;
+            transition: width 0.3s ease;
+        }
+        
+        .heatmap {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+            margin-top: 15px;
+        }
+        
+        .heatmap-cell {
+            aspect-ratio: 1;
+            background: #333;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .heatmap-cell.active {
+            background: #4caf50;
+            transform: scale(1.1);
+        }
+        
+        .player-card {
+            background: #262626;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .player-name {
+            font-weight: bold;
+            color: #2196f3;
+        }
+        
+        .biometric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .mini-metric {
+            text-align: center;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        .mini-metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .mini-metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .alert {
+            background: #ff5722;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .message-log {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+            opacity: 0.8;
+        }
+        
+        .log-entry.new {
+            color: #4caf50;
+            opacity: 1;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #4caf50;
+            margin-bottom: 30px;
+        }
+        
+        .connection-status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .connection-status.connected {
+            color: #4caf50;
+        }
+        
+        .connection-status.disconnected {
+            color: #f44336;
+        }
+        
+        .gesture-indicator {
+            font-size: 48px;
+            text-align: center;
+            margin: 20px 0;
+            filter: grayscale(1);
+            transition: all 0.3s ease;
+        }
+        
+        .gesture-indicator.active {
+            filter: grayscale(0);
+            transform: scale(1.2);
+        }
+        
+        .controller-visual {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 20px auto;
+            background: #262626;
+            border-radius: 50%;
+            border: 2px solid #444;
+        }
+        
+        .stick-position {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: #2196f3;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s ease;
+        }
+        
+        .battery-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .battery-bar {
+            flex: 1;
+            height: 20px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .battery-fill {
+            height: 100%;
+            background: #4caf50;
+            transition: width 0.3s ease;
+        }
+        
+        .battery-fill.low {
+            background: #f44336;
+        }
+        
+        .battery-fill.medium {
+            background: #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 IoT Puzzle Dashboard</h1>
+    <div class="connection-status disconnected" id="connectionStatus">
+        SignalR: Disconnected | MQTT: Disconnected
+    </div>
+    
+    <div class="dashboard">
+        <!-- Table Sensors Widget -->
+        <div class="widget">
+            <h3>
+                <span class="status-indicator" id="tableIndicator"></span>
+                Puzzle Table Sensors
+            </h3>
+            <div class="metric">
+                <span class="metric-label">Active Pieces</span>
+                <span class="metric-value" id="activePieces">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Total Weight</span>
+                <span class="metric-value" id="tableWeight">0g</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Last Gesture</span>
+                <span class="metric-value" id="lastGesture">none</span>
+            </div>
+            <div class="gesture-indicator" id="gestureIcon">✋</div>
+            <div class="heatmap" id="pressureHeatmap">
+                <div class="heatmap-cell">Z1</div>
+                <div class="heatmap-cell">Z2</div>
+                <div class="heatmap-cell">Z3</div>
+                <div class="heatmap-cell">Z4</div>
+            </div>
+        </div>
+        
+        <!-- Environmental Sensors Widget -->
+        <div class="widget">
+            <h3>
+                <span class="status-indicator" id="envIndicator"></span>
+                Environmental Conditions
+            </h3>
+            <div class="metric">
+                <span class="metric-label">Temperature</span>
+                <span class="metric-value" id="temperature">--°C</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Humidity</span>
+                <span class="metric-value" id="humidity">--%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Light Level</span>
+                <span class="metric-value" id="lightLevel">-- lux</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Noise Level</span>
+                <span class="metric-value" id="noiseLevel">-- dB</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Comfort Index</span>
+                <span class="metric-value" id="comfortIndex">0.0</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="comfortBar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="envRecommendations"></div>
+        </div>
+        
+        <!-- Player Biometrics Widget -->
+        <div class="widget">
+            <h3>
+                <span class="status-indicator" id="bioIndicator"></span>
+                Player Biometrics
+            </h3>
+            <div id="playerCards"></div>
+        </div>
+        
+        <!-- Game Controller Widget -->
+        <div class="widget">
+            <h3>
+                <span class="status-indicator" id="controllerIndicator"></span>
+                Game Controllers
+            </h3>
+            <div class="controller-visual">
+                <div class="stick-position" id="stickPosition"></div>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Active Controller</span>
+                <span class="metric-value" id="activeController">None</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Last Action</span>
+                <span class="metric-value" id="lastAction">-</span>
+            </div>
+            <div class="battery-indicator">
+                <span class="metric-label">Battery</span>
+                <div class="battery-bar">
+                    <div class="battery-fill" id="batteryFill" style="width: 0%"></div>
+                </div>
+                <span id="batteryPercent">0%</span>
+            </div>
+        </div>
+        
+        <!-- Storage Status Widget -->
+        <div class="widget">
+            <h3>
+                <span class="status-indicator" id="storageIndicator"></span>
+                Smart Puzzle Storage
+            </h3>
+            <div class="metric">
+                <span class="metric-label">Box Status</span>
+                <span class="metric-value" id="boxStatus">Unknown</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Total Pieces</span>
+                <span class="metric-value" id="totalPieces">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Missing Pieces</span>
+                <span class="metric-value danger" id="missingPieces">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Storage Temp</span>
+                <span class="metric-value" id="storageTemp">--°C</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Last Access</span>
+                <span class="metric-value" id="lastAccess">Never</span>
+            </div>
+        </div>
+        
+        <!-- MQTT Messages Widget -->
+        <div class="widget">
+            <h3>
+                <span class="status-indicator" id="mqttIndicator"></span>
+                MQTT Message Stream
+            </h3>
+            <div class="message-log" id="messageLog"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <script>
+        let connection = null;
+        const indicators = {};
+        const players = {};
+        
+        // Get all status indicators
+        document.querySelectorAll('.status-indicator').forEach(el => {
+            indicators[el.id] = el;
+        });
+        
+        // Gesture icons
+        const gestureIcons = {
+            'none': '✋',
+            'swipe': '👉',
+            'pinch': '🤏',
+            'rotate': '🔄',
+            'tap': '👆',
+            'hold': '✊'
+        };
+        
+        // Connect to SignalR
+        async function connect() {
+            try {
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl('/puzzlehub')
+                    .withAutomaticReconnect()
+                    .configureLogging(signalR.LogLevel.Information)
+                    .build();
+                
+                // Set up event handlers
+                setupEventHandlers();
+                
+                await connection.start();
+                updateConnectionStatus('SignalR: Connected | MQTT: Connecting...', true);
+                console.log('Connected to SignalR hub');
+                
+            } catch (error) {
+                console.error('Failed to connect:', error);
+                updateConnectionStatus('SignalR: Failed | MQTT: Unknown', false);
+                setTimeout(connect, 5000);
+            }
+        }
+        
+        function setupEventHandlers() {
+            // Raw MQTT messages
+            connection.on('MqttMessage', (data) => {
+                addLogEntry(`[${new Date(data.timestamp).toLocaleTimeString()}] ${data.topic}`);
+                
+                // Update relevant indicator
+                if (data.topic.includes('table')) activateIndicator('tableIndicator');
+                else if (data.topic.includes('environment')) activateIndicator('envIndicator');
+                else if (data.topic.includes('biometrics')) activateIndicator('bioIndicator');
+                else if (data.topic.includes('controller')) activateIndicator('controllerIndicator');
+                else if (data.topic.includes('storage')) activateIndicator('storageIndicator');
+            });
+            
+            // Table sensor updates
+            connection.on('TableSensorUpdate', (data) => {
+                document.getElementById('activePieces').textContent = data.activePieces;
+                activateIndicator('tableIndicator');
+            });
+            
+            // Gesture detection
+            connection.on('GestureDetected', (data) => {
+                const gestureEl = document.getElementById('lastGesture');
+                const iconEl = document.getElementById('gestureIcon');
+                
+                gestureEl.textContent = data.gesture;
+                iconEl.textContent = gestureIcons[data.gesture] || '✋';
+                iconEl.classList.add('active');
+                setTimeout(() => iconEl.classList.remove('active'), 1000);
+            });
+            
+            // Environmental updates
+            connection.on('EnvironmentUpdate', (data) => {
+                document.getElementById('temperature').textContent = `${data.temperature.toFixed(1)}°C`;
+                document.getElementById('humidity').textContent = `${data.humidity.toFixed(1)}%`;
+                document.getElementById('lightLevel').textContent = `${data.lightLevel} lux`;
+                document.getElementById('noiseLevel').textContent = `${data.noiseLevel} dB`;
+                
+                const comfortIndex = data.comfortIndex;
+                const comfortEl = document.getElementById('comfortIndex');
+                const comfortBar = document.getElementById('comfortBar');
+                
+                comfortEl.textContent = comfortIndex.toFixed(2);
+                comfortBar.style.width = `${comfortIndex * 100}%`;
+                
+                if (comfortIndex > 0.7) {
+                    comfortEl.className = 'metric-value good';
+                    comfortBar.style.background = '#4caf50';
+                } else if (comfortIndex > 0.4) {
+                    comfortEl.className = 'metric-value warning';
+                    comfortBar.style.background = '#ff9800';
+                } else {
+                    comfortEl.className = 'metric-value danger';
+                    comfortBar.style.background = '#f44336';
+                }
+                
+                // Show recommendations
+                try {
+                    const recommendations = JSON.parse(data.recommendations);
+                    const recEl = document.getElementById('envRecommendations');
+                    recEl.innerHTML = '';
+                    
+                    if (recommendations && recommendations.length > 0) {
+                        recommendations.forEach(rec => {
+                            const alert = document.createElement('div');
+                            alert.className = 'alert';
+                            alert.textContent = `💡 ${rec}`;
+                            recEl.appendChild(alert);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error parsing recommendations:', e);
+                }
+                
+                activateIndicator('envIndicator');
+            });
+            
+            // Player metrics
+            connection.on('PlayerMetrics', (data) => {
+                updatePlayerCard(data.playerId, {
+                    heartRate: data.heartRate,
+                    stressLevel: data.stressLevel,
+                    focusScore: data.focusScore
+                });
+                activateIndicator('bioIndicator');
+            });
+            
+            // Player alerts
+            connection.on('PlayerAlert', (data) => {
+                const playerCard = players[data.playerId];
+                if (playerCard) {
+                    const alert = document.createElement('div');
+                    alert.className = 'alert';
+                    alert.textContent = data.message;
+                    playerCard.appendChild(alert);
+                    
+                    setTimeout(() => alert.remove(), 5000);
+                }
+            });
+            
+            // Controller actions
+            connection.on('ControllerAction', (data) => {
+                document.getElementById('activeController').textContent = data.controllerId;
+                document.getElementById('lastAction').textContent = data.action;
+                activateIndicator('controllerIndicator');
+            });
+            
+            // Controller movement
+            connection.on('ControllerMove', (data) => {
+                const stick = document.getElementById('stickPosition');
+                const x = 50 + (data.x * 40); // Convert -1 to 1 range to pixels
+                const y = 50 + (data.y * 40);
+                
+                stick.style.left = `${x}%`;
+                stick.style.top = `${y}%`;
+                
+                document.getElementById('activeController').textContent = data.controllerId;
+                activateIndicator('controllerIndicator');
+            });
+            
+            // Controller battery
+            connection.on('ControllerBatteryLow', (data) => {
+                updateBattery(data.batteryLevel);
+            });
+            
+            // Storage updates
+            connection.on('StorageStatusUpdate', (data) => {
+                try {
+                    const status = JSON.parse(data.status);
+                    const inventory = JSON.parse(data.inventory);
+                    
+                    document.getElementById('boxStatus').textContent = status.isOpen ? 'Open' : 'Closed';
+                    document.getElementById('totalPieces').textContent = inventory.totalPieces;
+                    document.getElementById('missingPieces').textContent = inventory.missingPieces;
+                    document.getElementById('storageTemp').textContent = `${status.temperature.toFixed(1)}°C`;
+                    
+                    activateIndicator('storageIndicator');
+                } catch (e) {
+                    console.error('Error parsing storage data:', e);
+                }
+            });
+            
+            // Inventory alerts
+            connection.on('PuzzleInventoryAlert', (data) => {
+                const missingEl = document.getElementById('missingPieces');
+                missingEl.textContent = data.missingPieces;
+                missingEl.classList.add('danger');
+                
+                addLogEntry(`⚠️ Missing ${data.missingPieces} pieces in ${data.boxId}`, 'warning');
+            });
+            
+            // System messages
+            connection.on('MqttSystemMessage', (data) => {
+                if (data.topic.includes('connected')) {
+                    updateConnectionStatus('SignalR: Connected | MQTT: Connected', true);
+                    activateIndicator('mqttIndicator');
+                }
+            });
+        }
+        
+        function updatePlayerCard(playerId, data) {
+            let card = players[playerId];
+            
+            if (!card) {
+                // Create new player card
+                const container = document.getElementById('playerCards');
+                card = document.createElement('div');
+                card.className = 'player-card';
+                card.innerHTML = `
+                    <div class="player-header">
+                        <span class="player-name">${playerId}</span>
+                        <span id="${playerId}-status">Active</span>
+                    </div>
+                    <div class="biometric-grid">
+                        <div class="mini-metric">
+                            <div class="mini-metric-value" id="${playerId}-hr">--</div>
+                            <div class="mini-metric-label">Heart Rate</div>
+                        </div>
+                        <div class="mini-metric">
+                            <div class="mini-metric-value" id="${playerId}-stress">--</div>
+                            <div class="mini-metric-label">Stress</div>
+                        </div>
+                        <div class="mini-metric">
+                            <div class="mini-metric-value" id="${playerId}-focus">--</div>
+                            <div class="mini-metric-label">Focus</div>
+                        </div>
+                        <div class="mini-metric">
+                            <div class="mini-metric-value">👁️</div>
+                            <div class="mini-metric-label">Tracking</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+                players[playerId] = card;
+            }
+            
+            // Update values
+            const hrEl = document.getElementById(`${playerId}-hr`);
+            const stressEl = document.getElementById(`${playerId}-stress`);
+            const focusEl = document.getElementById(`${playerId}-focus`);
+            
+            hrEl.textContent = data.heartRate;
+            stressEl.textContent = (data.stressLevel * 100).toFixed(0) + '%';
+            focusEl.textContent = (data.focusScore * 100).toFixed(0) + '%';
+            
+            // Color coding
+            if (data.heartRate > 100) hrEl.style.color = '#ff9800';
+            if (data.stressLevel > 0.7) stressEl.style.color = '#f44336';
+            if (data.focusScore < 0.4) focusEl.style.color = '#ff9800';
+        }
+        
+        function updateBattery(level) {
+            const fill = document.getElementById('batteryFill');
+            const percent = document.getElementById('batteryPercent');
+            
+            fill.style.width = `${level}%`;
+            percent.textContent = `${level}%`;
+            
+            if (level < 20) {
+                fill.className = 'battery-fill low';
+            } else if (level < 50) {
+                fill.className = 'battery-fill medium';
+            } else {
+                fill.className = 'battery-fill';
+            }
+        }
+        
+        function activateIndicator(indicatorId) {
+            const indicator = indicators[indicatorId];
+            if (indicator) {
+                indicator.classList.add('active');
+                setTimeout(() => indicator.classList.remove('active'), 2000);
+            }
+        }
+        
+        function addLogEntry(message, type = 'info') {
+            const log = document.getElementById('messageLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry new';
+            entry.textContent = message;
+            
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+            
+            // Remove old entries if too many
+            while (log.children.length > 50) {
+                log.removeChild(log.firstChild);
+            }
+            
+            setTimeout(() => entry.classList.remove('new'), 1000);
+        }
+        
+        function updateConnectionStatus(text, connected) {
+            const status = document.getElementById('connectionStatus');
+            status.textContent = text;
+            status.className = connected ? 'connection-status connected' : 'connection-status disconnected';
+        }
+        
+        // Start connection
+        connect();
+        
+        // Reconnect on disconnect
+        if (connection) {
+            connection.onclose(() => {
+                updateConnectionStatus('SignalR: Disconnected | MQTT: Unknown', false);
+                setTimeout(connect, 5000);
+            });
+        }
+        
+        // Simulate some initial pressure zones
+        setTimeout(() => {
+            const zones = document.querySelectorAll('.heatmap-cell');
+            setInterval(() => {
+                zones.forEach((zone, i) => {
+                    if (Math.random() > 0.7) {
+                        zone.classList.add('active');
+                        setTimeout(() => zone.classList.remove('active'), 500);
+                    }
+                });
+            }, 2000);
+        }, 1000);
+    </script>
+</body>
+</html>

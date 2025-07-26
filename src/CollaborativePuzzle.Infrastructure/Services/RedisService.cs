@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CollaborativePuzzle.Core.Interfaces;
 
 namespace CollaborativePuzzle.Infrastructure.Services
@@ -18,7 +19,7 @@ namespace CollaborativePuzzle.Infrastructure.Services
         private readonly ILogger<RedisService> _logger;
         private readonly RedisConfiguration _config;
         private readonly JsonSerializerOptions _jsonOptions;
-        private bool _disposed = false;
+        private bool _disposed;
 
         public RedisService(
             IConnectionMultiplexer connectionMultiplexer,
@@ -320,16 +321,16 @@ namespace CollaborativePuzzle.Infrastructure.Services
             return await SetObjectAsync(key, value, expiry);
         }
 
-        public async Task<bool> SetAsync<T>(string key, T value, TimeSpan expiry, CollaborativePuzzle.Core.Enums.When when) where T : class
+        public async Task<bool> SetAsync<T>(string key, T value, TimeSpan expiry, CollaborativePuzzle.Core.Interfaces.When when) where T : class
         {
             var json = JsonSerializer.Serialize(value, _jsonOptions);
             var fullKey = BuildKey(key);
             
             var redisWhen = when switch
             {
-                CollaborativePuzzle.Core.Enums.When.Always => StackExchange.Redis.When.Always,
-                CollaborativePuzzle.Core.Enums.When.Exists => StackExchange.Redis.When.Exists,
-                CollaborativePuzzle.Core.Enums.When.NotExists => StackExchange.Redis.When.NotExists,
+                CollaborativePuzzle.Core.Interfaces.When.Always => StackExchange.Redis.When.Always,
+                CollaborativePuzzle.Core.Interfaces.When.Exists => StackExchange.Redis.When.Exists,
+                CollaborativePuzzle.Core.Interfaces.When.NotExists => StackExchange.Redis.When.NotExists,
                 _ => StackExchange.Redis.When.Always
             };
             
@@ -461,7 +462,7 @@ namespace CollaborativePuzzle.Infrastructure.Services
                 var result = new Dictionary<string, string?>();
                 for (int i = 0; i < keysList.Count; i++)
                 {
-                    result[keysList[i]] = values[i].HasValue ? values[i] : null;
+                    result[keysList[i]] = values[i].HasValue ? values[i].ToString() : null;
                 }
 
                 _logger.LogDebug("Retrieved {Count} Redis keys in batch operation", keysList.Count);
@@ -526,12 +527,12 @@ namespace CollaborativePuzzle.Infrastructure.Services
     {
         public string ConnectionString { get; set; } = string.Empty;
         public string InstanceName { get; set; } = "PuzzlePlatform";
-        public int Database { get; set; } = 0;
+        public int Database { get; set; }
         public TimeSpan DefaultExpiry { get; set; } = TimeSpan.FromHours(1);
         public bool EnableKeyspaceNotifications { get; set; } = true;
         public int CommandTimeout { get; set; } = 5000;
         public int ConnectTimeout { get; set; } = 5000;
-        public bool AbortOnConnectFail { get; set; } = false;
+        public bool AbortOnConnectFail { get; set; }
         public int ConnectRetry { get; set; } = 3;
         public string Password { get; set; } = string.Empty;
         public bool UseSsl { get; set; } = true;

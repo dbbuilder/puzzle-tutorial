@@ -6,9 +6,19 @@ namespace CollaborativePuzzle.Core.Enums
     public enum SessionStatus
     {
         /// <summary>
+        /// Default/unknown status
+        /// </summary>
+        None = 0,
+        
+        /// <summary>
         /// Session is active and accepting participants
         /// </summary>
         Active = 1,
+        
+        /// <summary>
+        /// Session is in progress (alias for Active)
+        /// </summary>
+        InProgress = 1,
         
         /// <summary>
         /// Session is paused, participants can rejoin but no new participants allowed

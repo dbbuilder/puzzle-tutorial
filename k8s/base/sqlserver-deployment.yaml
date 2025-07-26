@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: puzzle-db
+  namespace: puzzle-platform
+spec:
+  serviceName: puzzle-db-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: puzzle-db
+  template:
+    metadata:
+      labels:
+        app: puzzle-db
+        component: database
+    spec:
+      containers:
+      - name: sqlserver
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+        - containerPort: 1433
+          name: sql
+        env:
+        - name: ACCEPT_EULA
+          value: "Y"
+        - name: MSSQL_SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: puzzle-secrets
+              key: SQL_PASSWORD
+        - name: MSSQL_PID
+          value: "Developer"
+        - name: MSSQL_AGENT_ENABLED
+          value: "true"
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q "SELECT 1" || exit 1
+          initialDelaySeconds: 15
+          periodSeconds: 5
+        volumeMounts:
+        - name: sql-data
+          mountPath: /var/opt/mssql
+  volumeClaimTemplates:
+  - metadata:
+      name: sql-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 8Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: puzzle-db-service
+  namespace: puzzle-platform
+spec:
+  selector:
+    app: puzzle-db
+  ports:
+  - port: 1433
+    targetPort: 1433
+    name: sql
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet

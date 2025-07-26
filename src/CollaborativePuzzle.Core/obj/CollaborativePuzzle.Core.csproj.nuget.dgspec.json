@@ -1,31 +1,31 @@
 {
   "format": 1,
   "restore": {
-    "D:\\dev2\\puzzletutorial\\src\\CollaborativePuzzle.Core\\CollaborativePuzzle.Core.csproj": {}
+    "/mnt/d/dev2/puzzletutorial/src/CollaborativePuzzle.Core/CollaborativePuzzle.Core.csproj": {}
   },
   "projects": {
-    "D:\\dev2\\puzzletutorial\\src\\CollaborativePuzzle.Core\\CollaborativePuzzle.Core.csproj": {
+    "/mnt/d/dev2/puzzletutorial/src/CollaborativePuzzle.Core/CollaborativePuzzle.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\dev2\\puzzletutorial\\src\\CollaborativePuzzle.Core\\CollaborativePuzzle.Core.csproj",
+        "projectUniqueName": "/mnt/d/dev2/puzzletutorial/src/CollaborativePuzzle.Core/CollaborativePuzzle.Core.csproj",
         "projectName": "CollaborativePuzzle.Core",
-        "projectPath": "D:\\dev2\\puzzletutorial\\src\\CollaborativePuzzle.Core\\CollaborativePuzzle.Core.csproj",
-        "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-        "outputPath": "D:\\dev2\\puzzletutorial\\src\\CollaborativePuzzle.Core\\obj\\",
+        "projectPath": "/mnt/d/dev2/puzzletutorial/src/CollaborativePuzzle.Core/CollaborativePuzzle.Core.csproj",
+        "packagesPath": "/home/ted/.nuget/packages/",
+        "outputPath": "/mnt/d/dev2/puzzletutorial/src/CollaborativePuzzle.Core/obj/",
         "projectStyle": "PackageReference",
+        "centralPackageVersionsManagementEnabled": true,
         "configFilePaths": [
-          "C:\\Users\\Admin\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/home/ted/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
-          "net9.0"
+          "net8.0"
         ],
         "sources": {
-          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
-          "net9.0": {
-            "targetAlias": "net9.0",
+          "net8.0": {
+            "targetAlias": "net8.0",
             "projectReferences": {}
           }
         },
@@ -33,17 +33,94 @@
           "warnAsError": [
             "NU1605"
           ]
-        },
-        "restoreAuditProperties": {
-          "enableAudit": "true",
-          "auditLevel": "low",
-          "auditMode": "direct"
-        },
-        "SdkAnalysisLevel": "9.0.300"
+        }
       },
       "frameworks": {
-        "net9.0": {
-          "targetAlias": "net9.0",
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.CodeAnalysis.NetAnalyzers": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.0, )",
+              "versionCentrallyManaged": true
+            },
+            "SonarAnalyzer.CSharp": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[9.32.0.97167, )",
+              "versionCentrallyManaged": true
+            },
+            "StyleCop.Analyzers": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.2.0-beta.556, )",
+              "versionCentrallyManaged": true
+            }
+          },
+          "centralPackageVersions": {
+            "AspNetCore.HealthChecks.AzureStorage": "[8.0.1, )",
+            "AspNetCore.HealthChecks.Redis": "[8.0.1, )",
+            "AspNetCore.HealthChecks.SqlServer": "[8.0.2, )",
+            "AspNetCore.HealthChecks.UI.Client": "[8.0.1, )",
+            "AutoMapper": "[13.0.1, )",
+            "Azure.Identity": "[1.13.1, )",
+            "Azure.Messaging.ServiceBus": "[7.18.2, )",
+            "Azure.Security.KeyVault.Secrets": "[4.7.0, )",
+            "Azure.Storage.Blobs": "[12.22.2, )",
+            "coverlet.collector": "[6.0.2, )",
+            "Dapper": "[2.1.35, )",
+            "FluentAssertions": "[6.12.2, )",
+            "FluentValidation.AspNetCore": "[11.3.0, )",
+            "Hangfire.AspNetCore": "[1.8.15, )",
+            "Hangfire.SqlServer": "[1.8.15, )",
+            "MediatR": "[12.4.1, )",
+            "MessagePack": "[2.5.187, )",
+            "MessagePack.AspNetCore": "[2.5.187, )",
+            "Microsoft.AspNetCore.Authentication.JwtBearer": "[8.0.0, )",
+            "Microsoft.AspNetCore.Mvc.Testing": "[8.0.0, )",
+            "Microsoft.AspNetCore.OpenApi": "[8.0.0, )",
+            "Microsoft.AspNetCore.Server.Kestrel.Transport.Quic": "[8.0.0, )",
+            "Microsoft.AspNetCore.SignalR": "[1.1.0, )",
+            "Microsoft.AspNetCore.SignalR.Client": "[8.0.0, )",
+            "Microsoft.AspNetCore.SignalR.StackExchangeRedis": "[8.0.0, )",
+            "Microsoft.CodeAnalysis.NetAnalyzers": "[8.0.0, )",
+            "Microsoft.EntityFrameworkCore.Design": "[8.0.0, )",
+            "Microsoft.EntityFrameworkCore.InMemory": "[8.0.0, )",
+            "Microsoft.EntityFrameworkCore.SqlServer": "[8.0.0, )",
+            "Microsoft.EntityFrameworkCore.Tools": "[8.0.0, )",
+            "Microsoft.Extensions.Http.Polly": "[8.0.0, )",
+            "Microsoft.Extensions.Logging.Abstractions": "[8.0.2, )",
+            "Microsoft.Identity.Web": "[3.5.0, )",
+            "Microsoft.NET.Test.Sdk": "[17.12.0, )",
+            "Moq": "[4.20.72, )",
+            "MQTTnet": "[4.3.7.1207, )",
+            "MQTTnet.AspNetCore": "[4.3.7.1207, )",
+            "MQTTnet.Extensions.ManagedClient": "[4.3.7.1207, )",
+            "Polly": "[8.5.0, )",
+            "Serilog": "[3.1.1, )",
+            "Serilog.AspNetCore": "[8.0.3, )",
+            "Serilog.Enrichers.Environment": "[3.0.1, )",
+            "Serilog.Enrichers.Thread": "[4.0.0, )",
+            "Serilog.Sinks.ApplicationInsights": "[4.0.0, )",
+            "Serilog.Sinks.Console": "[6.0.0, )",
+            "Serilog.Sinks.File": "[6.0.0, )",
+            "SonarAnalyzer.CSharp": "[9.32.0.97167, )",
+            "StackExchange.Redis": "[2.8.16, )",
+            "StyleCop.Analyzers": "[1.2.0-beta.556, )",
+            "Swashbuckle.AspNetCore": "[7.2.0, )",
+            "Swashbuckle.AspNetCore.Annotations": "[7.2.0, )",
+            "System.IdentityModel.Tokens.Jwt": "[8.2.1, )",
+            "Testcontainers": "[4.1.0, )",
+            "Testcontainers.MsSql": "[4.1.0, )",
+            "Testcontainers.Redis": "[4.1.0, )",
+            "Testcontainers.SqlServer": "[4.1.0, )",
+            "xunit": "[2.9.2, )",
+            "xunit.runner.visualstudio": "[2.8.2, )"
+          },
           "imports": [
             "net461",
             "net462",
@@ -55,12 +132,61 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Runtime.linux-arm64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.AspNetCore.App.Runtime.linux-x64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.linux-arm64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.linux-x64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.win-x64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Runtime.linux-arm64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Runtime.linux-x64",
+              "version": "[8.0.17, 8.0.17]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Runtime.win-x64",
+              "version": "[8.0.17, 8.0.17]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.302/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.117/PortableRuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "linux-arm64": {
+          "#import": []
+        },
+        "linux-x64": {
+          "#import": []
+        },
+        "win-x64": {
+          "#import": []
         }
       }
     }

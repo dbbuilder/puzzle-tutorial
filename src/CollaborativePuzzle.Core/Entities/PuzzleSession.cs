@@ -39,12 +39,12 @@ namespace CollaborativePuzzle.Core.Entities
         public bool IsPublic { get; set; } = true;
         
         public SessionStatus Status { get; set; } = SessionStatus.Active;
-        
+
         // Progress tracking
-        public int CompletedPieces { get; set; } = 0;
+        public int CompletedPieces { get; set; }
         public decimal CompletionPercentage { get; set; } = 0.0m;
-        public int TotalMoves { get; set; } = 0;
-        
+        public int TotalMoves { get; set; }
+
         // Timing information
         public DateTime CreatedAt { get; set; }
         public DateTime? StartedAt { get; set; }
@@ -56,14 +56,14 @@ namespace CollaborativePuzzle.Core.Entities
         
         // Session settings
         public bool AllowPieceRotation { get; set; } = true;
-        public bool ShowPieceOutlines { get; set; } = false;
+        public bool ShowPieceOutlines { get; set; }
         public bool EnableSnapToGrid { get; set; } = true;
         public int SnapThreshold { get; set; } = 20;
         
         // Collaboration settings
         public int PieceLockTimeoutMinutes { get; set; } = 5;
-        public bool AllowConcurrentEditing { get; set; } = false;
-        
+        public bool AllowConcurrentEditing { get; set; }
+
         // Version for optimistic concurrency control
         [Timestamp]
         public byte[]? RowVersion { get; set; }

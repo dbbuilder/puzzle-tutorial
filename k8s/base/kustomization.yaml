@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: puzzle-platform
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- secrets.yaml
+- redis-deployment.yaml
+- sqlserver-deployment.yaml
+- mqtt-deployment.yaml
+- api-deployment.yaml
+- ingress.yaml
+- hpa.yaml
+- network-policies.yaml
+- service-monitor.yaml
+
+commonLabels:
+  app.kubernetes.io/name: collaborative-puzzle
+  app.kubernetes.io/part-of: puzzle-platform
+
+images:
+- name: puzzle-api
+  newTag: latest

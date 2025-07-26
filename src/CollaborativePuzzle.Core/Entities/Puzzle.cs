@@ -59,15 +59,15 @@ namespace CollaborativePuzzle.Core.Entities
         
         public bool IsPublic { get; set; } = true;
         public bool IsActive { get; set; } = true;
-        public bool IsFeatured { get; set; } = false;
-        
+        public bool IsFeatured { get; set; }
+
         // Usage statistics
         public int TotalSessions { get; set; } = 0;
-        public int TotalCompletions { get; set; } = 0;
+        public int TotalCompletions { get; set; }
         public TimeSpan AverageCompletionTime { get; set; } = TimeSpan.Zero;
-        public double AverageRating { get; set; } = 0.0;
-        public int TotalRatings { get; set; } = 0;
-        
+        public double AverageRating { get; set; }
+        public int TotalRatings { get; set; }
+
         // Navigation properties
         public virtual User CreatedByUser { get; set; } = null!;
         public virtual ICollection<PuzzlePiece> Pieces { get; set; } = new List<PuzzlePiece>();

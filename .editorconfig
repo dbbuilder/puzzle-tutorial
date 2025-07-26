@@ -160,3 +160,20 @@ csharp_style_prefer_null_check_over_type_check = true:suggestion
 # Code quality rules
 dotnet_code_quality.ca1062.severity = warning
 dotnet_code_quality.ca1303.severity = none
+
+# Analyzer severity - Quick fixes for common warnings
+dotnet_diagnostic.CA1805.severity = warning # Do not initialize unnecessarily
+dotnet_diagnostic.CA5394.severity = error # Do not use insecure randomness
+dotnet_diagnostic.CA1819.severity = warning # Properties should not return arrays
+dotnet_diagnostic.S4487.severity = warning # Unread private fields should be removed
+dotnet_diagnostic.CA2227.severity = warning # Collection properties should be read only
+dotnet_diagnostic.CA1031.severity = suggestion # Do not catch general exception types
+dotnet_diagnostic.CA1848.severity = suggestion # Use LoggerMessage delegates
+dotnet_diagnostic.S2139.severity = suggestion # Exceptions should be logged or rethrown with context
+dotnet_diagnostic.S2325.severity = suggestion # Methods should be static
+dotnet_diagnostic.CA1861.severity = warning # Prefer static readonly arrays
+dotnet_diagnostic.CA1851.severity = warning # Possible multiple enumeration
+dotnet_diagnostic.S6602.severity = warning # Use Find instead of FirstOrDefault
+dotnet_diagnostic.S4457.severity = suggestion # Split async parameter validation
+dotnet_diagnostic.CA1506.severity = none # Avoid excessive class coupling (Program.cs)
+dotnet_diagnostic.S1135.severity = none # TODO comments (intentional)

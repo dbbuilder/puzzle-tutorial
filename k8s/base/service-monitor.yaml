@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: puzzle-api-metrics
+  namespace: puzzle-platform
+  labels:
+    app: puzzle-api
+    metrics: "true"
+spec:
+  selector:
+    app: puzzle-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: metrics
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: puzzle-api-monitor
+  namespace: puzzle-platform
+  labels:
+    app: puzzle-api
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: puzzle-api
+      metrics: "true"
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: puzzle-api-rules
+  namespace: puzzle-platform
+  labels:
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: puzzle-api
+    interval: 30s
+    rules:
+    - alert: HighSignalRConnections
+      expr: signalr_connections_count > 5000
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High number of SignalR connections"
+        description: "SignalR connections {{ $value }} exceeds threshold"
+    
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes{pod=~"puzzle-api-.*"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High memory usage in puzzle-api"
+        description: "Memory usage is above 90% for {{ $labels.pod }}"
+    
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate"
+        description: "Error rate is above 5% for puzzle-api"
