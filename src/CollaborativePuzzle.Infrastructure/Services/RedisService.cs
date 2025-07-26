@@ -310,6 +310,38 @@ namespace CollaborativePuzzle.Infrastructure.Services
             }
         }
 
+        public async Task<T?> GetAsync<T>(string key) where T : class
+        {
+            return await GetObjectAsync<T>(key);
+        }
+
+        public async Task<bool> SetAsync<T>(string key, T value, TimeSpan? expiry = null) where T : class
+        {
+            return await SetObjectAsync(key, value, expiry);
+        }
+
+        public async Task<bool> SetAsync<T>(string key, T value, TimeSpan expiry, CollaborativePuzzle.Core.Enums.When when) where T : class
+        {
+            var json = JsonSerializer.Serialize(value, _jsonOptions);
+            var fullKey = BuildKey(key);
+            
+            var redisWhen = when switch
+            {
+                CollaborativePuzzle.Core.Enums.When.Always => StackExchange.Redis.When.Always,
+                CollaborativePuzzle.Core.Enums.When.Exists => StackExchange.Redis.When.Exists,
+                CollaborativePuzzle.Core.Enums.When.NotExists => StackExchange.Redis.When.NotExists,
+                _ => StackExchange.Redis.When.Always
+            };
+            
+            return await _database.StringSetAsync(fullKey, json, expiry, redisWhen);
+        }
+
+        public async Task PublishAsync<T>(string channel, T message) where T : class
+        {
+            var json = JsonSerializer.Serialize(message, _jsonOptions);
+            await PublishAsync(channel, json);
+        }
+
         #region Additional Redis Operations for Advanced Features
 
         /// <summary>

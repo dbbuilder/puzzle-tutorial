@@ -445,5 +445,43 @@ namespace CollaborativePuzzle.Infrastructure.Repositories
             _logger.LogInformation("Successfully inserted {TotalPieces} pieces for puzzle {PuzzleId}", 
                 piecesList.Count, puzzleId);
         }
+
+        // IPuzzleRepository interface methods
+        public Task<Puzzle?> GetPuzzleAsync(Guid puzzleId) => GetPuzzleByIdAsync(puzzleId);
+        
+        public async Task<IEnumerable<Puzzle>> GetPuzzlesAsync(int page = 1, int pageSize = 20)
+        {
+            var skip = (page - 1) * pageSize;
+            return await GetPublicPuzzlesAsync(skip, pageSize);
+        }
+        
+        public async Task<Puzzle> CreatePuzzleAsync(string title, string imageUrl, int pieceCount, int width, int height, Guid createdByUserId)
+        {
+            var puzzle = new Puzzle
+            {
+                Title = title,
+                ImageUrl = imageUrl,
+                PieceCount = pieceCount,
+                Width = width,
+                Height = height,
+                CreatedByUserId = createdByUserId,
+                GridColumns = (int)Math.Sqrt(pieceCount),
+                GridRows = (int)Math.Sqrt(pieceCount),
+                Difficulty = PuzzleDifficulty.Medium,
+                Category = "General",
+                IsPublic = true
+            };
+            
+            var pieces = new List<PuzzlePiece>();
+            // Generate pieces would happen here
+            
+            return await CreatePuzzleAsync(puzzle, pieces);
+        }
+        
+        public Task<IEnumerable<Puzzle>> GetPuzzlesByDifficultyAsync(PuzzleDifficulty difficulty, int limit = 10)
+        {
+            // This would need a new stored procedure
+            return Task.FromResult<IEnumerable<Puzzle>>(Array.Empty<Puzzle>());
+        }
     }
 }

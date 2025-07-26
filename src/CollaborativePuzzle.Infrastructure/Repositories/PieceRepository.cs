@@ -435,5 +435,40 @@ namespace CollaborativePuzzle.Infrastructure.Repositories
             // - Dependency injection of current user service
             return Guid.NewGuid(); // Temporary implementation
         }
+
+        // IPieceRepository interface methods
+        public Task<PuzzlePiece?> GetPieceAsync(Guid pieceId) => GetPieceByIdAsync(pieceId);
+        
+        public Task<IEnumerable<PuzzlePiece>> GetPuzzlePiecesAsync(Guid puzzleId) => GetPiecesByPuzzleIdAsync(puzzleId);
+        
+        public async Task<bool> UpdatePiecePositionAsync(Guid pieceId, double x, double y, int rotation)
+        {
+            var result = await UpdatePiecePositionAsync(pieceId, (int)x, (int)y, rotation, false);
+            return result.Success;
+        }
+        
+        public async Task<bool> UnlockPieceAsync(Guid pieceId)
+        {
+            // This needs the user ID - for now just return false
+            return false;
+        }
+        
+        public async Task<bool> UnlockAllPiecesForUserAsync(Guid userId)
+        {
+            var count = await UnlockAllPiecesByUserAsync(userId);
+            return count > 0;
+        }
+        
+        public Task<IEnumerable<PuzzlePiece>> GetLockedPiecesAsync(Guid puzzleId)
+        {
+            // This would need a new stored procedure
+            return Task.FromResult<IEnumerable<PuzzlePiece>>(Array.Empty<PuzzlePiece>());
+        }
+        
+        public Task<bool> SetPieceAsPlacedAsync(Guid pieceId, Guid placedByUserId)
+        {
+            // This would need a new stored procedure
+            return Task.FromResult(false);
+        }
     }
 }
