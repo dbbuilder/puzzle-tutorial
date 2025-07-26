@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Puzzle Platform - Documentation Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for tree view */
+        .tree-item {
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+        .tree-item:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .tree-item.active {
+            background-color: rgba(59, 130, 246, 0.2);
+            font-weight: 600;
+        }
+        .tree-folder {
+            font-weight: 600;
+        }
+        .tree-children {
+            margin-left: 1.5rem;
+        }
+        /* Markdown content styling */
+        .markdown-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .markdown-content h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #1a202c;
+        }
+        .markdown-content h2 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #2d3748;
+        }
+        .markdown-content h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #4a5568;
+        }
+        .markdown-content h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: #4a5568;
+        }
+        .markdown-content p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+        }
+        .markdown-content ul, .markdown-content ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+        .markdown-content li {
+            margin-bottom: 0.5rem;
+            line-height: 1.75;
+        }
+        .markdown-content code {
+            background-color: #f7fafc;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        .markdown-content pre {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        .markdown-content blockquote {
+            border-left: 4px solid #cbd5e0;
+            padding-left: 1rem;
+            margin-bottom: 1rem;
+            font-style: italic;
+            color: #718096;
+        }
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        .markdown-content th, .markdown-content td {
+            border: 1px solid #e2e8f0;
+            padding: 0.5rem;
+            text-align: left;
+        }
+        .markdown-content th {
+            background-color: #f7fafc;
+            font-weight: 600;
+        }
+        .markdown-content a {
+            color: #3182ce;
+            text-decoration: underline;
+        }
+        .markdown-content a:hover {
+            color: #2c5282;
+        }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Left sidebar with tree view -->
+        <div class="w-80 bg-white shadow-lg overflow-y-auto">
+            <div class="p-4 border-b">
+                <h1 class="text-xl font-bold text-gray-800">Documentation Explorer</h1>
+                <p class="text-sm text-gray-600 mt-1">Collaborative Puzzle Platform</p>
+            </div>
+            <div id="treeView" class="p-4">
+                <!-- Tree view will be populated here -->
+            </div>
+        </div>
+
+        <!-- Right content area -->
+        <div class="flex-1 overflow-y-auto">
+            <div id="contentArea" class="p-8 max-w-5xl mx-auto">
+                <div id="summaryContent" class="markdown-content">
+                    <h1>Collaborative Puzzle Platform Documentation</h1>
+                    
+                    <h2>Project Overview</h2>
+                    <p>Welcome to the comprehensive documentation for the Collaborative Puzzle Platform. This is a real-time collaborative jigsaw puzzle application built with modern web technologies including ASP.NET Core, SignalR, WebRTC, Redis, and Vue.js. The platform enables multiple users to simultaneously work on digital puzzles with live synchronization, voice chat capabilities, and persistent state management.</p>
+
+                    <h2>Documentation Structure</h2>
+                    <p>The documentation is organized into several key areas to help you understand, deploy, and contribute to the project:</p>
+
+                    <h3>Core Documentation</h3>
+                    <ul>
+                        <li><strong>README.md</strong> - Quick start guide and project overview</li>
+                        <li><strong>REQUIREMENTS.md</strong> - Detailed functional and technical requirements</li>
+                        <li><strong>DEVELOPMENT.md</strong> - Development setup and workflow guidelines</li>
+                        <li><strong>TODO.md</strong> - Current development tasks and priorities</li>
+                        <li><strong>FUTURE.md</strong> - Future enhancements and roadmap</li>
+                    </ul>
+
+                    <h3>Architecture Documentation</h3>
+                    <ul>
+                        <li><strong>ARCHITECTURE_OVERVIEW.md</strong> - System architecture and component relationships</li>
+                        <li><strong>KUBERNETES_ARCHITECTURE.md</strong> - Kubernetes deployment architecture</li>
+                        <li><strong>CONFIGURATION_FILES_GUIDE.md</strong> - Configuration management guide</li>
+                        <li><strong>SECRETS_MANAGEMENT.md</strong> - Security and secrets handling</li>
+                    </ul>
+
+                    <h3>Implementation Guides</h3>
+                    <ul>
+                        <li><strong>SIGNALR_REDIS_GUIDE.md</strong> - Real-time communication implementation</li>
+                        <li><strong>WEBRTC_GUIDE.md</strong> - Voice chat and peer-to-peer communication</li>
+                        <li><strong>WEBSOCKET_PROTOCOL.md</strong> - WebSocket protocol details</li>
+                        <li><strong>MQTT_IOT_GUIDE.md</strong> - IoT device integration</li>
+                        <li><strong>TDD_GUIDE.md</strong> - Test-driven development practices</li>
+                    </ul>
+
+                    <h3>Technology Stack</h3>
+                    <p>The platform leverages a modern technology stack designed for scalability and real-time collaboration:</p>
+                    
+                    <h4>Backend Technologies</h4>
+                    <ul>
+                        <li>ASP.NET Core 8.0 with Minimal APIs</li>
+                        <li>Entity Framework Core with SQL Server (Stored Procedures)</li>
+                        <li>SignalR for real-time updates</li>
+                        <li>Redis for caching and SignalR backplane</li>
+                        <li>Azure Blob Storage for file management</li>
+                        <li>Docker containers and Kubernetes orchestration</li>
+                    </ul>
+
+                    <h4>Frontend Technologies</h4>
+                    <ul>
+                        <li>Vue.js 3 with Composition API</li>
+                        <li>TypeScript for type safety</li>
+                        <li>Tailwind CSS for styling</li>
+                        <li>Pinia for state management</li>
+                        <li>WebRTC for voice communication</li>
+                    </ul>
+
+                    <h3>Key Features</h3>
+                    <p>The platform provides a comprehensive set of features for collaborative puzzle solving:</p>
+                    <ul>
+                        <li>Real-time puzzle piece synchronization across multiple users</li>
+                        <li>Voice chat capabilities for team communication</li>
+                        <li>Persistent puzzle state with save/resume functionality</li>
+                        <li>Support for custom puzzle uploads</li>
+                        <li>Scalable architecture supporting hundreds of concurrent sessions</li>
+                        <li>Comprehensive monitoring and logging</li>
+                        <li>Security-first design with Azure AD B2C integration</li>
+                    </ul>
+
+                    <h3>Getting Started</h3>
+                    <p>To get started with the project:</p>
+                    <ol>
+                        <li>Review the <strong>README.md</strong> for quick setup instructions</li>
+                        <li>Check <strong>REQUIREMENTS.md</strong> for detailed project specifications</li>
+                        <li>Follow <strong>DEVELOPMENT.md</strong> for local development setup</li>
+                        <li>Explore the architecture guides for system design understanding</li>
+                        <li>Reference implementation guides for specific feature development</li>
+                    </ol>
+
+                    <h3>Navigation</h3>
+                    <p>Use the tree view on the left to navigate through all documentation files. Each file provides detailed information about specific aspects of the platform. The documentation is designed to be read in any order, though newcomers may benefit from starting with the README and REQUIREMENTS files.</p>
+                </div>
+                <div id="markdownContent" class="markdown-content" style="display: none;">
+                    <!-- Markdown content will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // File structure with actual paths
+        const fileStructure = {
+            'Root': {
+                'README.md': 'D:\\dev2\\puzzletutorial\\README.md',
+                'REQUIREMENTS.md': 'D:\\dev2\\puzzletutorial\\REQUIREMENTS.md',
+                'DEVELOPMENT.md': 'D:\\dev2\\puzzletutorial\\DEVELOPMENT.md',
+                'TODO.md': 'D:\\dev2\\puzzletutorial\\TODO.md',
+                'FUTURE.md': 'D:\\dev2\\puzzletutorial\\FUTURE.md',
+                'CLAUDE.md': 'D:\\dev2\\puzzletutorial\\CLAUDE.md',
+                'ORIGINAL_PROJECT_LIST.md': 'D:\\dev2\\puzzletutorial\\ORIGINAL_PROJECT_LIST.md'
+            },
+            'docs': {
+                'ARCHITECTURE_OVERVIEW.md': 'D:\\dev2\\puzzletutorial\\docs\\ARCHITECTURE_OVERVIEW.md',
+                'CONFIGURATION_FILES_GUIDE.md': 'D:\\dev2\\puzzletutorial\\docs\\CONFIGURATION_FILES_GUIDE.md',
+                'JSON_YAML_FILES_REFERENCE.md': 'D:\\dev2\\puzzletutorial\\docs\\JSON_YAML_FILES_REFERENCE.md',
+                'KUBERNETES_ARCHITECTURE.md': 'D:\\dev2\\puzzletutorial\\docs\\KUBERNETES_ARCHITECTURE.md',
+                'KUBERNETES_DEPLOYMENT_GUIDE.md': 'D:\\dev2\\puzzletutorial\\docs\\KUBERNETES_DEPLOYMENT_GUIDE.md',
+                'MQTT_IOT_GUIDE.md': 'D:\\dev2\\puzzletutorial\\docs\\MQTT_IOT_GUIDE.md',
+                'SECRETS_MANAGEMENT.md': 'D:\\dev2\\puzzletutorial\\docs\\SECRETS_MANAGEMENT.md',
+                'SIGNALR_REDIS_GUIDE.md': 'D:\\dev2\\puzzletutorial\\docs\\SIGNALR_REDIS_GUIDE.md',
+                'SOCKETIO_COMPATIBILITY.md': 'D:\\dev2\\puzzletutorial\\docs\\SOCKETIO_COMPATIBILITY.md',
+                'STUDY_GUIDE.md': 'D:\\dev2\\puzzletutorial\\docs\\STUDY_GUIDE.md',
+                'TDD_GUIDE.md': 'D:\\dev2\\puzzletutorial\\docs\\TDD_GUIDE.md',
+                'WEBRTC_GUIDE.md': 'D:\\dev2\\puzzletutorial\\docs\\WEBRTC_GUIDE.md',
+                'WEBSOCKET_PROTOCOL.md': 'D:\\dev2\\puzzletutorial\\docs\\WEBSOCKET_PROTOCOL.md',
+                'mqtt-implementation.md': 'D:\\dev2\\puzzletutorial\\docs\\mqtt-implementation.md',
+                'quic-implementation.md': 'D:\\dev2\\puzzletutorial\\docs\\quic-implementation.md',
+                'redis-implementation.md': 'D:\\dev2\\puzzletutorial\\docs\\redis-implementation.md',
+                'signalr-implementation.md': 'D:\\dev2\\puzzletutorial\\docs\\signalr-implementation.md',
+                'webrtc-implementation.md': 'D:\\dev2\\puzzletutorial\\docs\\webrtc-implementation.md',
+                'websockets-implementation.md': 'D:\\dev2\\puzzletutorial\\docs\\websockets-implementation.md'
+            }
+        };
+
+        // Store markdown content cache
+        const contentCache = {};
+        let currentFile = null;
+
+        // Create tree view
+        function createTreeView() {
+            const treeView = document.getElementById('treeView');
+            treeView.innerHTML = '';
+
+            for (const [folder, files] of Object.entries(fileStructure)) {
+                if (folder === 'Root') {
+                    // Add root level files
+                    for (const [filename, filepath] of Object.entries(files)) {
+                        const item = createTreeItem(filename, filepath, false);
+                        treeView.appendChild(item);
+                    }
+                } else {
+                    // Create folder
+                    const folderDiv = document.createElement('div');
+                    folderDiv.className = 'mb-2';
+                    
+                    const folderHeader = document.createElement('div');
+                    folderHeader.className = 'tree-item tree-folder p-2 rounded flex items-center';
+                    folderHeader.innerHTML = `
+                        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
+                        </svg>
+                        ${folder}
+                    `;
+                    
+                    const childrenDiv = document.createElement('div');
+                    childrenDiv.className = 'tree-children';
+                    
+                    // Add files in folder
+                    for (const [filename, filepath] of Object.entries(files)) {
+                        const item = createTreeItem(filename, filepath, true);
+                        childrenDiv.appendChild(item);
+                    }
+                    
+                    folderDiv.appendChild(folderHeader);
+                    folderDiv.appendChild(childrenDiv);
+                    treeView.appendChild(folderDiv);
+                }
+            }
+        }
+
+        // Create individual tree item
+        function createTreeItem(filename, filepath, inFolder) {
+            const item = document.createElement('div');
+            item.className = `tree-item p-2 rounded flex items-center ${inFolder ? '' : 'ml-0'}`;
+            item.innerHTML = `
+                <svg class="w-4 h-4 mr-2 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-5L9 2H4z" clip-rule="evenodd"></path>
+                </svg>
+                ${filename}
+            `;
+            item.onclick = () => loadFile(filename, filepath);
+            return item;
+        }
+
+        // Load and display file content
+        async function loadFile(filename, filepath) {
+            // Update active state
+            document.querySelectorAll('.tree-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            // Hide summary, show content
+            document.getElementById('summaryContent').style.display = 'none';
+            document.getElementById('markdownContent').style.display = 'block';
+
+            // Show loading state
+            const contentDiv = document.getElementById('markdownContent');
+            contentDiv.innerHTML = '<div class="text-center py-8"><div class="inline-flex items-center"><svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Loading...</div></div>';
+
+            try {
+                // Simulate file loading (in real implementation, this would be an API call)
+                if (!contentCache[filepath]) {
+                    // For demo purposes, we'll show a placeholder
+                    contentCache[filepath] = `# ${filename}\n\n*Note: This is a placeholder. In a real implementation, this would load the actual file content from the server.*\n\nFile path: \`${filepath}\``;
+                }
+
+                // Render markdown
+                const markdown = contentCache[filepath];
+                const html = marked.parse(markdown);
+                contentDiv.innerHTML = html;
+
+                // Scroll to top
+                contentDiv.parentElement.scrollTop = 0;
+                currentFile = filename;
+
+            } catch (error) {
+                contentDiv.innerHTML = `<div class="text-red-600 p-4 bg-red-50 rounded"><strong>Error loading file:</strong> ${error.message}</div>`;
+            }
+        }
+
+        // Show summary
+        function showSummary() {
+            document.getElementById('summaryContent').style.display = 'block';
+            document.getElementById('markdownContent').style.display = 'none';
+            document.querySelectorAll('.tree-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            currentFile = null;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            createTreeView();
+            
+            // Add home button
+            const treeView = document.getElementById('treeView');
+            const homeButton = document.createElement('div');
+            homeButton.className = 'tree-item p-2 rounded flex items-center mb-2 bg-blue-50 text-blue-700';
+            homeButton.innerHTML = `
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                </svg>
+                Documentation Summary
+            `;
+            homeButton.onclick = showSummary;
+            treeView.insertBefore(homeButton, treeView.firstChild);
+        });
+
+        // Configure marked options
+        marked.setOptions({
+            highlight: function(code, lang) {
+                // Basic syntax highlighting
+                return code;
+            },
+            breaks: true,
+            gfm: true
+        });
+    </script>
+</body>
+</html>

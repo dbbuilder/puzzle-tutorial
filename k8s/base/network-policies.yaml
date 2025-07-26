@@ -1,0 +1,117 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: puzzle-api-network-policy
+  namespace: puzzle-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: puzzle-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - podSelector:
+        matchLabels:
+          app: puzzle-api
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: puzzle-redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to:
+    - podSelector:
+        matchLabels:
+          app: puzzle-db
+    ports:
+    - protocol: TCP
+      port: 1433
+  - to:
+    - podSelector:
+        matchLabels:
+          app: puzzle-mqtt
+    ports:
+    - protocol: TCP
+      port: 1883
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: puzzle-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: puzzle-redis
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: puzzle-api
+    ports:
+    - protocol: TCP
+      port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-network-policy
+  namespace: puzzle-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: puzzle-db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: puzzle-api
+    ports:
+    - protocol: TCP
+      port: 1433
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mqtt-network-policy
+  namespace: puzzle-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: puzzle-mqtt
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: puzzle-api
+    ports:
+    - protocol: TCP
+      port: 1883
+    - protocol: TCP
+      port: 9001

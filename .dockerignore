@@ -1,0 +1,70 @@
+# Build results
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/out/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test results
+**/TestResults/
+**/*.trx
+**/*.coverage
+**/coverage.json
+**/coverage.cobertura.xml
+
+# NuGet
+*.nupkg
+**/packages/
+**/project.lock.json
+**/project.fragment.lock.json
+
+# Node modules (for future web projects)
+**/node_modules/
+**/npm-debug.log
+**/yarn-error.log
+
+# Secrets and sensitive files
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.Production.json
+**/*.pfx
+**/*.key
+**/*.pem
+**/.env
+**/.env.*
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation (keep minimal for image)
+docs/
+*.md
+!README.md
+
+# IDE
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Build artifacts we don't need
+**/*.pdb
+!**/Microsoft.*.pdb

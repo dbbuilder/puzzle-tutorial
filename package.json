@@ -1,0 +1,24 @@
+{
+  "name": "markdown-documentation-viewer",
+  "version": "1.0.0",
+  "description": "Interactive documentation viewer for Collaborative Puzzle Platform",
+  "main": "markdown-server.js",
+  "scripts": {
+    "start": "node markdown-server.js",
+    "dev": "nodemon markdown-server.js"
+  },
+  "keywords": [
+    "documentation",
+    "markdown",
+    "viewer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "marked": "^4.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

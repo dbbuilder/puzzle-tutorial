@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.IO Compatibility Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #666;
+            font-size: 1.2em;
+            margin-top: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex: 1;
+            min-width: 200px;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px;
+        }
+        .log-sent {
+            color: #007bff;
+        }
+        .log-received {
+            color: #28a745;
+        }
+        .log-error {
+            color: #dc3545;
+        }
+        .log-system {
+            color: #6c757d;
+            font-style: italic;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .protocol-info {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .test-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .test-result {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .test-pass {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .test-fail {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+    <!-- Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- SignalR Client Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+</head>
+<body>
+    <h1>Socket.IO to SignalR Compatibility Layer Test</h1>
+
+    <div class="container">
+        <div class="protocol-info">
+            <strong>Protocol Comparison:</strong>
+            This page demonstrates how Socket.IO clients can connect to a SignalR backend through a compatibility layer.
+            It shows both Socket.IO and native SignalR connections side by side.
+        </div>
+
+        <div class="comparison">
+            <!-- Socket.IO Client -->
+            <div>
+                <h2>Socket.IO Client</h2>
+                <div class="status" id="socketio-status">Disconnected</div>
+                
+                <div class="controls">
+                    <button id="socketio-connect">Connect</button>
+                    <button id="socketio-disconnect" disabled>Disconnect</button>
+                </div>
+
+                <div class="controls">
+                    <input type="text" id="socketio-room" placeholder="Room name">
+                    <button id="socketio-join" disabled>Join Room</button>
+                    <button id="socketio-leave" disabled>Leave Room</button>
+                </div>
+
+                <div class="controls">
+                    <input type="text" id="socketio-message" placeholder="Message">
+                    <button id="socketio-send" disabled>Send Message</button>
+                    <button id="socketio-broadcast" disabled>Broadcast</button>
+                </div>
+
+                <h3>Socket.IO Log:</h3>
+                <div class="log" id="socketio-log"></div>
+            </div>
+
+            <!-- SignalR Client -->
+            <div>
+                <h2>Native SignalR Client</h2>
+                <div class="status" id="signalr-status">Disconnected</div>
+                
+                <div class="controls">
+                    <button id="signalr-connect">Connect</button>
+                    <button id="signalr-disconnect" disabled>Disconnect</button>
+                </div>
+
+                <div class="controls">
+                    <input type="text" id="signalr-room" placeholder="Room name">
+                    <button id="signalr-join" disabled>Join Room</button>
+                    <button id="signalr-leave" disabled>Leave Room</button>
+                </div>
+
+                <div class="controls">
+                    <input type="text" id="signalr-message" placeholder="Message">
+                    <button id="signalr-send" disabled>Send Message</button>
+                    <button id="signalr-broadcast" disabled>Broadcast</button>
+                </div>
+
+                <h3>SignalR Log:</h3>
+                <div class="log" id="signalr-log"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container test-section">
+        <h2>Compatibility Tests</h2>
+        <div id="test-results"></div>
+        <button id="run-tests">Run Compatibility Tests</button>
+    </div>
+
+    <script>
+        // Socket.IO Client
+        let socket = null;
+        const socketioLog = document.getElementById('socketio-log');
+        const socketioStatus = document.getElementById('socketio-status');
+
+        function logSocketIO(message, type = 'system') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            socketioLog.appendChild(entry);
+            socketioLog.scrollTop = socketioLog.scrollHeight;
+        }
+
+        // Socket.IO Connection
+        document.getElementById('socketio-connect').addEventListener('click', () => {
+            socket = io('/socket.io/', {
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                logSocketIO('Connected to Socket.IO server', 'system');
+                socketioStatus.textContent = 'Connected';
+                socketioStatus.className = 'status connected';
+                updateSocketIOButtons(true);
+            });
+
+            socket.on('disconnect', () => {
+                logSocketIO('Disconnected from Socket.IO server', 'system');
+                socketioStatus.textContent = 'Disconnected';
+                socketioStatus.className = 'status disconnected';
+                updateSocketIOButtons(false);
+            });
+
+            socket.on('message', (data) => {
+                logSocketIO(`Message received: ${JSON.stringify(data)}`, 'received');
+            });
+
+            socket.on('joined', (data) => {
+                logSocketIO(`Joined room: ${data.room}`, 'system');
+            });
+
+            socket.on('message-sent', (data) => {
+                logSocketIO('Message sent successfully', 'system');
+            });
+
+            socket.on('pong-test', (data) => {
+                logSocketIO(`Pong received: ${data.timestamp}`, 'received');
+            });
+
+            socket.on('error', (error) => {
+                logSocketIO(`Error: ${error}`, 'error');
+            });
+
+            // Listen for SignalR events forwarded through Socket.IO
+            socket.on('ReceiveMessage', (connectionId, message) => {
+                logSocketIO(`[${connectionId}] ${message}`, 'received');
+            });
+
+            socket.on('SocketIOEvent', (eventName, data) => {
+                logSocketIO(`Event '${eventName}': ${JSON.stringify(data)}`, 'received');
+            });
+        });
+
+        document.getElementById('socketio-disconnect').addEventListener('click', () => {
+            if (socket) {
+                socket.disconnect();
+            }
+        });
+
+        document.getElementById('socketio-join').addEventListener('click', () => {
+            const room = document.getElementById('socketio-room').value;
+            if (room && socket) {
+                socket.emit('join', { room });
+                logSocketIO(`Joining room: ${room}`, 'sent');
+            }
+        });
+
+        document.getElementById('socketio-leave').addEventListener('click', () => {
+            const room = document.getElementById('socketio-room').value;
+            if (room && socket) {
+                socket.emit('leave', { room });
+                logSocketIO(`Leaving room: ${room}`, 'sent');
+            }
+        });
+
+        document.getElementById('socketio-send').addEventListener('click', () => {
+            const message = document.getElementById('socketio-message').value;
+            if (message && socket) {
+                socket.emit('message', message);
+                logSocketIO(`Sending: ${message}`, 'sent');
+            }
+        });
+
+        document.getElementById('socketio-broadcast').addEventListener('click', () => {
+            const message = document.getElementById('socketio-message').value;
+            if (message && socket) {
+                socket.emit('broadcast', { event: 'custom-broadcast', data: message });
+                logSocketIO(`Broadcasting: ${message}`, 'sent');
+            }
+        });
+
+        function updateSocketIOButtons(connected) {
+            document.getElementById('socketio-connect').disabled = connected;
+            document.getElementById('socketio-disconnect').disabled = !connected;
+            document.getElementById('socketio-join').disabled = !connected;
+            document.getElementById('socketio-leave').disabled = !connected;
+            document.getElementById('socketio-send').disabled = !connected;
+            document.getElementById('socketio-broadcast').disabled = !connected;
+        }
+
+        // SignalR Client
+        let connection = null;
+        const signalrLog = document.getElementById('signalr-log');
+        const signalrStatus = document.getElementById('signalr-status');
+
+        function logSignalR(message, type = 'system') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            signalrLog.appendChild(entry);
+            signalrLog.scrollTop = signalrLog.scrollHeight;
+        }
+
+        // SignalR Connection
+        document.getElementById('signalr-connect').addEventListener('click', async () => {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl('/socketiohub')
+                .withAutomaticReconnect()
+                .build();
+
+            connection.on('JoinedRoom', (room) => {
+                logSignalR(`Joined room: ${room}`, 'system');
+            });
+
+            connection.on('LeftRoom', (room) => {
+                logSignalR(`Left room: ${room}`, 'system');
+            });
+
+            connection.on('ReceiveMessage', (connectionId, message) => {
+                logSignalR(`[${connectionId}] ${message}`, 'received');
+            });
+
+            connection.on('SocketIOEvent', (eventName, data) => {
+                logSignalR(`Event '${eventName}': ${JSON.stringify(data)}`, 'received');
+            });
+
+            connection.on('UserJoinedRoom', (userId) => {
+                logSignalR(`User ${userId} joined the room`, 'system');
+            });
+
+            connection.on('UserLeftRoom', (userId) => {
+                logSignalR(`User ${userId} left the room`, 'system');
+            });
+
+            try {
+                await connection.start();
+                logSignalR('Connected to SignalR hub', 'system');
+                signalrStatus.textContent = 'Connected';
+                signalrStatus.className = 'status connected';
+                updateSignalRButtons(true);
+            } catch (err) {
+                logSignalR(`Connection failed: ${err}`, 'error');
+            }
+        });
+
+        document.getElementById('signalr-disconnect').addEventListener('click', async () => {
+            if (connection) {
+                await connection.stop();
+                logSignalR('Disconnected from SignalR hub', 'system');
+                signalrStatus.textContent = 'Disconnected';
+                signalrStatus.className = 'status disconnected';
+                updateSignalRButtons(false);
+            }
+        });
+
+        document.getElementById('signalr-join').addEventListener('click', async () => {
+            const room = document.getElementById('signalr-room').value;
+            if (room && connection) {
+                try {
+                    await connection.invoke('JoinRoom', room);
+                    logSignalR(`Joining room: ${room}`, 'sent');
+                } catch (err) {
+                    logSignalR(`Error joining room: ${err}`, 'error');
+                }
+            }
+        });
+
+        document.getElementById('signalr-leave').addEventListener('click', async () => {
+            const room = document.getElementById('signalr-room').value;
+            if (room && connection) {
+                try {
+                    await connection.invoke('LeaveRoom', room);
+                    logSignalR(`Leaving room: ${room}`, 'sent');
+                } catch (err) {
+                    logSignalR(`Error leaving room: ${err}`, 'error');
+                }
+            }
+        });
+
+        document.getElementById('signalr-send').addEventListener('click', async () => {
+            const message = document.getElementById('signalr-message').value;
+            if (message && connection) {
+                try {
+                    await connection.invoke('SendMessage', message);
+                    logSignalR(`Sending: ${message}`, 'sent');
+                } catch (err) {
+                    logSignalR(`Error sending message: ${err}`, 'error');
+                }
+            }
+        });
+
+        document.getElementById('signalr-broadcast').addEventListener('click', async () => {
+            const message = document.getElementById('signalr-message').value;
+            if (message && connection) {
+                try {
+                    await connection.invoke('Broadcast', 'custom-broadcast', message);
+                    logSignalR(`Broadcasting: ${message}`, 'sent');
+                } catch (err) {
+                    logSignalR(`Error broadcasting: ${err}`, 'error');
+                }
+            }
+        });
+
+        function updateSignalRButtons(connected) {
+            document.getElementById('signalr-connect').disabled = connected;
+            document.getElementById('signalr-disconnect').disabled = !connected;
+            document.getElementById('signalr-join').disabled = !connected;
+            document.getElementById('signalr-leave').disabled = !connected;
+            document.getElementById('signalr-send').disabled = !connected;
+            document.getElementById('signalr-broadcast').disabled = !connected;
+        }
+
+        // Compatibility Tests
+        document.getElementById('run-tests').addEventListener('click', async () => {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h3>Running tests...</h3>';
+
+            const tests = [
+                {
+                    name: 'Socket.IO Connection',
+                    run: async () => {
+                        return socket && socket.connected;
+                    }
+                },
+                {
+                    name: 'SignalR Connection',
+                    run: async () => {
+                        return connection && connection.state === signalR.HubConnectionState.Connected;
+                    }
+                },
+                {
+                    name: 'Cross-Protocol Messaging',
+                    run: async () => {
+                        return new Promise((resolve) => {
+                            if (!socket || !connection) {
+                                resolve(false);
+                                return;
+                            }
+
+                            let received = false;
+                            const testMessage = `Test-${Date.now()}`;
+                            
+                            const handler = (connId, msg) => {
+                                if (msg === testMessage) {
+                                    received = true;
+                                    connection.off('ReceiveMessage', handler);
+                                }
+                            };
+
+                            connection.on('ReceiveMessage', handler);
+                            socket.emit('message', testMessage);
+
+                            setTimeout(() => resolve(received), 2000);
+                        });
+                    }
+                },
+                {
+                    name: 'Socket.IO Event Handling',
+                    run: async () => {
+                        return new Promise((resolve) => {
+                            if (!socket) {
+                                resolve(false);
+                                return;
+                            }
+
+                            socket.emit('ping-test');
+                            socket.once('pong-test', () => resolve(true));
+                            setTimeout(() => resolve(false), 1000);
+                        });
+                    }
+                },
+                {
+                    name: 'Room Management',
+                    run: async () => {
+                        return new Promise((resolve) => {
+                            if (!socket) {
+                                resolve(false);
+                                return;
+                            }
+
+                            socket.emit('join', { room: 'test-room' });
+                            socket.once('joined', (data) => {
+                                resolve(data.room === 'test-room');
+                            });
+                            setTimeout(() => resolve(false), 1000);
+                        });
+                    }
+                }
+            ];
+
+            results.innerHTML = '';
+            for (const test of tests) {
+                const result = await test.run();
+                const div = document.createElement('div');
+                div.className = `test-result ${result ? 'test-pass' : 'test-fail'}`;
+                div.textContent = `${test.name}: ${result ? 'PASS' : 'FAIL'}`;
+                results.appendChild(div);
+            }
+        });
+    </script>
+</body>
+</html>

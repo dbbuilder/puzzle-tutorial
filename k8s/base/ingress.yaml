@@ -1,0 +1,79 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: puzzle-ingress
+  namespace: puzzle-platform
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "puzzle-api-service"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "puzzle-session"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "86400"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - puzzle.example.com
+    secretName: puzzle-tls
+  rules:
+  - host: puzzle.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: puzzle-api-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: puzzle-websocket-ingress
+  namespace: puzzle-platform
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ws.puzzle.example.com
+    http:
+      paths:
+      - path: /puzzlehub
+        pathType: Prefix
+        backend:
+          service:
+            name: puzzle-api-service
+            port:
+              number: 80
+      - path: /webrtchub
+        pathType: Prefix
+        backend:
+          service:
+            name: puzzle-api-service
+            port:
+              number: 80
+      - path: /socket.io
+        pathType: Prefix
+        backend:
+          service:
+            name: puzzle-api-service
+            port:
+              number: 80
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: puzzle-api-service
+            port:
+              number: 80

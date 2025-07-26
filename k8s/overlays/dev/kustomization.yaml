@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: puzzle-platform-dev
+
+bases:
+- ../../base
+
+namePrefix: dev-
+
+commonLabels:
+  environment: development
+
+patchesStrategicMerge:
+- deployment-patch.yaml
+- ingress-patch.yaml
+
+configMapGenerator:
+- name: puzzle-api-config
+  behavior: merge
+  files:
+  - appsettings.Development.json
+
+secretGenerator:
+- name: puzzle-secrets
+  behavior: replace
+  literals:
+  - SQL_PASSWORD=DevPassword123!
+  - REDIS_PASSWORD=dev-redis-pass
+  - TURN_SECRET=dev-turn-secret
+  - JWT_SECRET=dev-jwt-secret-key-for-testing-only
+  - MQTT_PASSWORD=dev-mqtt-pass
+
+replicas:
+- name: puzzle-api
+  count: 1
+- name: puzzle-redis
+  count: 1
+- name: puzzle-mqtt
+  count: 1

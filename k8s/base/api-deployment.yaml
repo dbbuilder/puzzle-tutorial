@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: puzzle-api
+  namespace: puzzle-platform
+  labels:
+    app: puzzle-api
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: puzzle-api
+  template:
+    metadata:
+      labels:
+        app: puzzle-api
+        component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: api
+        image: puzzle-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+        - containerPort: 443
+          name: https
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ASPNETCORE_URLS
+          value: "http://+:80;https://+:443"
+        - name: ConnectionStrings__DefaultConnection
+          value: "Server=puzzle-db-service;Database=CollaborativePuzzle;User Id=sa;Password=$(SQL_PASSWORD);TrustServerCertificate=true"
+        - name: ConnectionStrings__Redis
+          value: "puzzle-redis-service:6379,password=$(REDIS_PASSWORD)"
+        - name: SQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: puzzle-secrets
+              key: SQL_PASSWORD
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: puzzle-secrets
+              key: REDIS_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: puzzle-secrets
+              key: JWT_SECRET
+        - name: TURN_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: puzzle-secrets
+              key: TURN_SECRET
+        volumeMounts:
+        - name: config
+          mountPath: /app/appsettings.Production.json
+          subPath: appsettings.Production.json
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+      volumes:
+      - name: config
+        configMap:
+          name: puzzle-api-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: puzzle-api-service
+  namespace: puzzle-platform
+  labels:
+    app: puzzle-api
+spec:
+  selector:
+    app: puzzle-api
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+  - port: 443
+    targetPort: 443
+    name: https
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours for SignalR connections

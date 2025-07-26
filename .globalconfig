@@ -1,0 +1,119 @@
+# .globalconfig file for analyzer configuration
+is_global = true
+
+# CA1062: Validate arguments of public methods
+dotnet_diagnostic.CA1062.severity = warning
+
+# CA1303: Do not pass literals as localized parameters
+dotnet_diagnostic.CA1303.severity = none
+
+# CA1031: Do not catch general exception types
+dotnet_diagnostic.CA1031.severity = warning
+
+# CA2007: Do not directly await a Task
+dotnet_diagnostic.CA2007.severity = none
+
+# CA1716: Identifiers should not match keywords
+dotnet_diagnostic.CA1716.severity = suggestion
+
+# CA1724: Type names should not match namespaces
+dotnet_diagnostic.CA1724.severity = suggestion
+
+# IDE0005: Remove unnecessary using directives
+dotnet_diagnostic.IDE0005.severity = warning
+
+# IDE0055: Fix formatting
+dotnet_diagnostic.IDE0055.severity = warning
+
+# SA1633: File should have header
+dotnet_diagnostic.SA1633.severity = none
+
+# SA1200: Using directives should be placed correctly
+dotnet_diagnostic.SA1200.severity = warning
+
+# SA1101: Prefix local calls with this
+dotnet_diagnostic.SA1101.severity = none
+
+# SA1309: Field names should not begin with underscore
+dotnet_diagnostic.SA1309.severity = none
+
+# SA1413: Use trailing comma in multi-line initializers
+dotnet_diagnostic.SA1413.severity = suggestion
+
+# SA1516: Elements should be separated by blank line
+dotnet_diagnostic.SA1516.severity = suggestion
+
+# SA1600: Elements should be documented
+dotnet_diagnostic.SA1600.severity = warning
+
+# SA1601: Partial elements should be documented
+dotnet_diagnostic.SA1601.severity = warning
+
+# SA1602: Enumeration items should be documented
+dotnet_diagnostic.SA1602.severity = suggestion
+
+# SA1611: Element parameters should be documented
+dotnet_diagnostic.SA1611.severity = warning
+
+# SA1615: Element return value should be documented
+dotnet_diagnostic.SA1615.severity = warning
+
+# SA1618: Generic type parameters should be documented
+dotnet_diagnostic.SA1618.severity = warning
+
+# SA1629: Documentation text should end with a period
+dotnet_diagnostic.SA1629.severity = suggestion
+
+# CS1591: Missing XML comment for publicly visible type or member
+dotnet_diagnostic.CS1591.severity = none
+
+# S125: Sections of code should not be commented out
+dotnet_diagnostic.S125.severity = suggestion
+
+# S1075: URIs should not be hardcoded
+dotnet_diagnostic.S1075.severity = warning
+
+# S4136: Method overloads should be grouped together
+dotnet_diagnostic.S4136.severity = warning
+
+# S3925: "ISerializable" should be implemented correctly
+dotnet_diagnostic.S3925.severity = warning
+
+# S3881: "IDisposable" should be implemented correctly
+dotnet_diagnostic.S3881.severity = warning
+
+# S4457: Parameter validation in async/await methods
+dotnet_diagnostic.S4457.severity = warning
+
+# Performance rules
+dotnet_diagnostic.CA1822.severity = suggestion # Mark members as static
+dotnet_diagnostic.CA1825.severity = warning    # Avoid zero-length array allocations
+dotnet_diagnostic.CA1826.severity = warning    # Use property instead of Linq Enumerable method
+dotnet_diagnostic.CA1827.severity = warning    # Do not use Count/LongCount when Any can be used
+dotnet_diagnostic.CA1828.severity = warning    # Do not use CountAsync/LongCountAsync when AnyAsync can be used
+dotnet_diagnostic.CA1829.severity = warning    # Use Length/Count property instead of Enumerable.Count method
+
+# Security rules
+dotnet_diagnostic.CA2100.severity = error      # Review SQL queries for security vulnerabilities
+dotnet_diagnostic.CA3075.severity = error      # Insecure DTD Processing
+dotnet_diagnostic.CA5351.severity = error      # Do not use broken cryptographic algorithms
+dotnet_diagnostic.CA5359.severity = error      # Do not disable certificate validation
+dotnet_diagnostic.CA5360.severity = error      # Do not call dangerous methods in deserialization
+dotnet_diagnostic.CA5363.severity = error      # Do not disable request validation
+dotnet_diagnostic.CA5364.severity = error      # Do not use deprecated security protocols
+dotnet_diagnostic.CA5365.severity = error      # Do not disable HTTP header checking
+
+# Reliability rules
+dotnet_diagnostic.CA2000.severity = warning    # Dispose objects before losing scope
+dotnet_diagnostic.CA2002.severity = warning    # Do not lock on objects with weak identity
+dotnet_diagnostic.CA2008.severity = warning    # Do not create tasks without passing a TaskScheduler
+dotnet_diagnostic.CA2009.severity = warning    # Do not call ToImmutableCollection on an ImmutableCollection value
+dotnet_diagnostic.CA2012.severity = warning    # Use ValueTasks correctly
+
+# Maintainability rules
+dotnet_diagnostic.CA1501.severity = warning    # Avoid excessive inheritance
+dotnet_diagnostic.CA1502.severity = warning    # Avoid excessive complexity
+dotnet_diagnostic.CA1505.severity = warning    # Avoid unmaintainable code
+dotnet_diagnostic.CA1506.severity = warning    # Avoid excessive class coupling
+dotnet_diagnostic.CA1508.severity = warning    # Avoid dead conditional code
+dotnet_diagnostic.CA1509.severity = warning    # Invalid entry in code metrics configuration file

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Puzzle Platform - Documentation Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <style>
+        /* Custom styles for tree view */
+        .tree-item {
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+        .tree-item:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .tree-item.active {
+            background-color: rgba(59, 130, 246, 0.2);
+            font-weight: 600;
+            border-left: 3px solid #3b82f6;
+        }
+        .tree-folder {
+            font-weight: 600;
+        }
+        .tree-children {
+            margin-left: 1.5rem;
+        }
+        .folder-collapsed .tree-children {
+            display: none;
+        }
+        .folder-icon {
+            transition: transform 0.2s;
+        }
+        .folder-collapsed .folder-icon {
+            transform: rotate(-90deg);
+        }
+        /* Markdown content styling */
+        .markdown-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .markdown-content h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            margin-top: 2rem;
+            color: #1a202c;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+        .markdown-content h2 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #2d3748;
+        }
+        .markdown-content h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #4a5568;
+        }
+        .markdown-content h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: #4a5568;
+        }
+        .markdown-content p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+            color: #4a5568;
+        }
+        .markdown-content ul, .markdown-content ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+        .markdown-content li {
+            margin-bottom: 0.5rem;
+            line-height: 1.75;
+            color: #4a5568;
+        }
+        .markdown-content code {
+            background-color: #f7fafc;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            color: #d63384;
+        }
+        .markdown-content pre {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        .markdown-content blockquote {
+            border-left: 4px solid #3b82f6;
+            padding-left: 1rem;
+            margin-bottom: 1rem;
+            font-style: italic;
+            color: #718096;
+            background-color: #f7fafc;
+            padding: 1rem;
+            border-radius: 0.25rem;
+        }
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+            overflow-x: auto;
+            display: block;
+        }
+        .markdown-content th, .markdown-content td {
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem;
+            text-align: left;
+        }
+        .markdown-content th {
+            background-color: #f7fafc;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        .markdown-content tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        .markdown-content a {
+            color: #3182ce;
+            text-decoration: underline;
+        }
+        .markdown-content a:hover {
+            color: #2c5282;
+        }
+        .markdown-content hr {
+            margin: 2rem 0;
+            border-color: #e2e8f0;
+        }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Search highlight */
+        .search-highlight {
+            background-color: #fef3c7;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Left sidebar with tree view -->
+        <div class="w-96 bg-white shadow-lg overflow-y-auto flex flex-col">
+            <div class="p-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                <h1 class="text-xl font-bold">Documentation Explorer</h1>
+                <p class="text-sm opacity-90 mt-1">Collaborative Puzzle Platform</p>
+            </div>
+            
+            <!-- Search box -->
+            <div class="p-4 border-b">
+                <input 
+                    type="text" 
+                    id="searchBox" 
+                    placeholder="Search documentation..."
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+            </div>
+
+            <div id="treeView" class="flex-1 p-4">
+                <!-- Tree view will be populated here -->
+            </div>
+            
+            <!-- Footer with stats -->            <div class="p-4 border-t bg-gray-50 text-sm text-gray-600">
+                <div id="fileStats">Loading documentation...</div>
+            </div>
+        </div>
+
+        <!-- Right content area -->
+        <div class="flex-1 overflow-y-auto">
+            <!-- Breadcrumb navigation -->
+            <div id="breadcrumb" class="bg-white border-b px-8 py-3 text-sm text-gray-600 hidden">
+                <span class="font-medium">Navigation:</span>
+                <span id="breadcrumbPath"></span>
+            </div>
+            
+            <div id="contentArea" class="p-8 max-w-5xl mx-auto">
+                <div id="summaryContent" class="markdown-content">
+                    <h1>Collaborative Puzzle Platform Documentation</h1>
+                    
+                    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                        <p class="text-blue-700">
+                            <strong>Welcome!</strong> This documentation viewer provides comprehensive information about the Collaborative Puzzle Platform. 
+                            Use the navigation tree on the left to explore different documentation files.
+                        </p>
+                    </div>
+
+                    <h2>🚀 Project Overview</h2>
+                    <p>The Collaborative Puzzle Platform is a state-of-the-art real-time collaborative jigsaw puzzle application that demonstrates modern web development practices and distributed system architecture. Built with cutting-edge technologies, it enables multiple users to work together on digital puzzles with seamless synchronization.</p>
+
+                    <h2>📚 Documentation Structure</h2>
+                    <p>Our documentation is organized to help developers, architects, and operators understand every aspect of the platform:</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
+                        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-blue-600">📋 Core Documentation</h3>
+                            <ul class="space-y-2">
+                                <li class="flex items-start">
+                                    <span class="text-green-500 mr-2">✓</span>
+                                    <div>
+                                        <strong>README.md</strong> - Quick start guide and overview
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-green-500 mr-2">✓</span>
+                                    <div>
+                                        <strong>REQUIREMENTS.md</strong> - Detailed specifications
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-green-500 mr-2">✓</span>
+                                    <div>
+                                        <strong>DEVELOPMENT.md</strong> - Development workflow
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-purple-600">🏗️ Architecture Guides</h3>
+                            <ul class="space-y-2">
+                                <li class="flex items-start">
+                                    <span class="text-purple-500 mr-2">◆</span>
+                                    <div>
+                                        <strong>System Architecture</strong> - Component relationships
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-purple-500 mr-2">◆</span>
+                                    <div>
+                                        <strong>Kubernetes Setup</strong> - Container orchestration
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-purple-500 mr-2">◆</span>
+                                    <div>
+                                        <strong>Security Design</strong> - Authentication & secrets
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-orange-600">🔧 Implementation Details</h3>
+                            <ul class="space-y-2">
+                                <li class="flex items-start">
+                                    <span class="text-orange-500 mr-2">★</span>
+                                    <div>
+                                        <strong>Real-time Features</strong> - SignalR & WebSockets
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-orange-500 mr-2">★</span>
+                                    <div>
+                                        <strong>Voice Chat</strong> - WebRTC implementation
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-orange-500 mr-2">★</span>
+                                    <div>
+                                        <strong>Caching Strategy</strong> - Redis configuration
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-green-600">💻 Technology Stack</h3>
+                            <ul class="space-y-2">
+                                <li class="flex items-start">
+                                    <span class="text-green-500 mr-2">▶</span>
+                                    <div>
+                                        <strong>Backend</strong> - ASP.NET Core 8.0, EF Core
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-green-500 mr-2">▶</span>
+                                    <div>
+                                        <strong>Frontend</strong> - Vue.js 3, TypeScript
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-green-500 mr-2">▶</span>
+                                    <div>
+                                        <strong>Infrastructure</strong> - Docker, Kubernetes
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <h2>🎯 Key Features</h2>
+                    <div class="bg-gray-50 rounded-lg p-6 my-6">
+                        <ul class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <li class="flex items-center">
+                                <span class="text-2xl mr-3">🧩</span>
+                                Real-time puzzle piece synchronization
+                            </li>
+                            <li class="flex items-center">
+                                <span class="text-2xl mr-3">🎤</span>
+                                Integrated voice chat for teams
+                            </li>
+                            <li class="flex items-center">
+                                <span class="text-2xl mr-3">💾</span>
+                                Persistent state with save/resume
+                            </li>
+                            <li class="flex items-center">
+                                <span class="text-2xl mr-3">📸</span>
+                                Custom puzzle image uploads
+                            </li>
+                            <li class="flex items-center">
+                                <span class="text-2xl mr-3">⚡</span>
+                                Sub-100ms latency updates
+                            </li>
+                            <li class="flex items-center">
+                                <span class="text-2xl mr-3">🔒</span>
+                                Enterprise-grade security
+                            </li>
+                        </ul>
+                    </div>
+
+                    <h2>🏃 Getting Started</h2>
+                    <ol class="bg-white rounded-lg p-6 my-6 shadow-sm border border-gray-200">
+                        <li class="mb-3">
+                            <strong>Step 1:</strong> Review the <code>README.md</code> for quick setup instructions
+                        </li>
+                        <li class="mb-3">
+                            <strong>Step 2:</strong> Check <code>REQUIREMENTS.md</code> for detailed specifications
+                        </li>
+                        <li class="mb-3">
+                            <strong>Step 3:</strong> Follow <code>DEVELOPMENT.md</code> for local development
+                        </li>
+                        <li class="mb-3">
+                            <strong>Step 4:</strong> Explore architecture guides for system design
+                        </li>
+                        <li>
+                            <strong>Step 5:</strong> Reference implementation guides for features
+                        </li>
+                    </ol>
+
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-6">
+                        <p class="text-yellow-700">
+                            <strong>Tip:</strong> Use the search box above to quickly find specific topics across all documentation files.
+                        </p>
+                    </div>
+                </div>
+                <div id="markdownContent" class="markdown-content" style="display: none;">
+                    <!-- Markdown content will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let fileStructure = {};
+        let contentCache = {};
+        let currentFile = null;
+        let fileCount = 0;
+
+        // Configure marked with syntax highlighting
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true,
+            gfm: true,
+            tables: true,
+            pedantic: false,
+            sanitize: false,
+            smartLists: true,
+            smartypants: true
+        });
+
+        // Fetch file structure from server
+        async function loadFileStructure() {
+            try {
+                const response = await fetch('/api/files');
+                if (!response.ok) throw new Error('Failed to load file structure');
+                
+                fileStructure = await response.json();
+                createTreeView();
+                updateFileStats();
+            } catch (error) {
+                console.error('Error loading file structure:', error);
+                document.getElementById('treeView').innerHTML = 
+                    '<div class="text-red-600 p-4">Error loading files. Please ensure the server is running.</div>';
+            }
+        }
+
+        // Create tree view
+        function createTreeView() {
+            const treeView = document.getElementById('treeView');
+            treeView.innerHTML = '';
+
+            // Add home button
+            const homeButton = document.createElement('div');
+            homeButton.className = 'tree-item p-3 rounded-lg flex items-center mb-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md hover:shadow-lg transition-all';
+            homeButton.innerHTML = `
+                <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                </svg>
+                Documentation Overview
+            `;
+            homeButton.onclick = showSummary;
+            treeView.appendChild(homeButton);
+
+            fileCount = 0;
+            for (const [folder, files] of Object.entries(fileStructure)) {
+                if (folder === 'Root') {
+                    // Add root level files
+                    for (const [filename, filepath] of Object.entries(files)) {
+                        const item = createTreeItem(filename, filepath, false);
+                        treeView.appendChild(item);
+                        fileCount++;
+                    }
+                } else {
+                    // Create folder
+                    const folderDiv = document.createElement('div');
+                    folderDiv.className = 'mb-2';
+                    
+                    const folderHeader = document.createElement('div');
+                    folderHeader.className = 'tree-item tree-folder p-2 rounded-lg flex items-center cursor-pointer';
+                    folderHeader.innerHTML = `
+                        <svg class="folder-icon w-4 h-4 mr-2 text-blue-600 transition-transform" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                        <svg class="w-4 h-4 mr-2 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
+                        </svg>
+                        <span class="flex-1">${folder}</span>
+                        <span class="text-xs text-gray-500 ml-2">${Object.keys(files).length} files</span>
+                    `;
+                    
+                    const childrenDiv = document.createElement('div');
+                    childrenDiv.className = 'tree-children mt-1';
+                    
+                    // Add files in folder
+                    for (const [filename, filepath] of Object.entries(files)) {
+                        const item = createTreeItem(filename, filepath, true);
+                        childrenDiv.appendChild(item);
+                        fileCount++;
+                    }
+                    
+                    // Toggle folder
+                    folderHeader.onclick = () => {
+                        folderDiv.classList.toggle('folder-collapsed');
+                    };
+                    
+                    folderDiv.appendChild(folderHeader);
+                    folderDiv.appendChild(childrenDiv);
+                    treeView.appendChild(folderDiv);
+                }
+            }
+        }
+
+        // Create individual tree item
+        function createTreeItem(filename, filepath, inFolder) {
+            const item = document.createElement('div');
+            item.className = `tree-item p-2 rounded-lg flex items-center hover:bg-gray-100 ${inFolder ? '' : 'ml-0'}`;
+            item.dataset.filename = filename.toLowerCase();
+            item.dataset.filepath = filepath;
+            
+            const iconColor = filename.includes('README') ? 'text-green-600' : 
+                           filename.includes('REQUIREMENTS') ? 'text-blue-600' : 
+                           filename.includes('TODO') ? 'text-orange-600' : 
+                           filename.includes('FUTURE') ? 'text-purple-600' : 'text-gray-600';
+            
+            item.innerHTML = `
+                <svg class="w-4 h-4 mr-2 ${iconColor}" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-5L9 2H4z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="flex-1">${filename}</span>
+            `;
+            item.onclick = () => loadFile(filename, filepath, item);
+            return item;
+        }
+
+        // Load and display file content
+        async function loadFile(filename, filepath, element) {
+            // Update active state
+            document.querySelectorAll('.tree-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            element.classList.add('active');
+
+            // Update breadcrumb
+            updateBreadcrumb(filename, filepath);
+
+            // Hide summary, show content
+            document.getElementById('summaryContent').style.display = 'none';
+            document.getElementById('markdownContent').style.display = 'block';
+
+            // Show loading state
+            const contentDiv = document.getElementById('markdownContent');
+            contentDiv.innerHTML = `
+                <div class="flex items-center justify-center py-12">
+                    <div class="loading"></div>
+                    <span class="ml-3 text-gray-600">Loading ${filename}...</span>
+                </div>
+            `;
+
+            try {
+                // Check cache first
+                if (!contentCache[filepath]) {
+                    const response = await fetch(`/api/file?path=${encodeURIComponent(filepath)}`);
+                    if (!response.ok) throw new Error('Failed to load file');
+                    
+                    const data = await response.json();
+                    contentCache[filepath] = data.content;
+                }
+
+                // Render markdown
+                const markdown = contentCache[filepath];
+                const html = marked.parse(markdown);
+                contentDiv.innerHTML = html;
+
+                // Apply syntax highlighting to code blocks
+                contentDiv.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+
+                // Scroll to top
+                contentDiv.parentElement.scrollTop = 0;
+                currentFile = filename;
+
+            } catch (error) {
+                contentDiv.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                        <strong>Error loading file:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Show summary
+        function showSummary() {
+            document.getElementById('summaryContent').style.display = 'block';
+            document.getElementById('markdownContent').style.display = 'none';
+            document.getElementById('breadcrumb').classList.add('hidden');
+            document.querySelectorAll('.tree-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            currentFile = null;
+        }
+
+        // Update breadcrumb navigation
+        function updateBreadcrumb(filename, filepath) {
+            const breadcrumb = document.getElementById('breadcrumb');
+            const breadcrumbPath = document.getElementById('breadcrumbPath');
+            
+            breadcrumb.classList.remove('hidden');
+            
+            const pathParts = filepath.split('\\').slice(-2);
+            breadcrumbPath.innerHTML = pathParts.map((part, index) => {
+                if (index === pathParts.length - 1) {
+                    return `<span class="font-medium text-gray-900">${part}</span>`;
+                }
+                return `<span class="text-gray-500">${part}</span> <span class="mx-2">/</span>`;
+            }).join('');
+        }
+
+        // Update file statistics
+        function updateFileStats() {
+            const stats = document.getElementById('fileStats');
+            stats.innerHTML = `
+                <div class="flex justify-between">
+                    <span>Total Files: <strong>${fileCount}</strong></span>
+                    <span>Folders: <strong>${Object.keys(fileStructure).length}</strong></span>
+                </div>
+            `;
+        }
+
+        // Search functionality
+        function setupSearch() {
+            const searchBox = document.getElementById('searchBox');
+            searchBox.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase().trim();
+                
+                document.querySelectorAll('.tree-item[data-filename]').forEach(item => {
+                    const filename = item.dataset.filename;
+                    if (query === '' || filename.includes(query)) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+
+                // Expand all folders when searching
+                if (query !== '') {
+                    document.querySelectorAll('.folder-collapsed').forEach(folder => {
+                        folder.classList.remove('folder-collapsed');
+                    });
+                }
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFileStructure();
+            setupSearch();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Raw Endpoint Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1, h2 {
+            color: #333;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
+        .status.connected {
+            background-color: #4caf50;
+            color: white;
+        }
+        
+        .status.disconnected {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .status.connecting {
+            background-color: #ff9800;
+            color: white;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: #1976D2;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .message {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        
+        .message.sent {
+            background-color: #e3f2fd;
+            text-align: right;
+        }
+        
+        .message.received {
+            background-color: #f5f5f5;
+        }
+        
+        .message.system {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .message.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .stat {
+            text-align: center;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Raw Endpoint Test</h1>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>Connection</h2>
+            <div class="status disconnected" id="connectionStatus">Disconnected</div>
+            
+            <div class="control-group">
+                <input type="text" id="wsUrl" value="ws://localhost:5000/ws" placeholder="WebSocket URL">
+            </div>
+            
+            <div class="control-group">
+                <button id="connectBtn" onclick="connect()">Connect</button>
+                <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            </div>
+            
+            <h3>Send Message</h3>
+            <div class="control-group">
+                <select id="messageType">
+                    <option value="ping">Ping</option>
+                    <option value="echo">Echo</option>
+                    <option value="broadcast">Broadcast</option>
+                    <option value="binary-request">Binary Request</option>
+                    <option value="custom">Custom JSON</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <textarea id="messageData" rows="4" placeholder='{"type": "echo", "data": "Hello, WebSocket!"}'></textarea>
+            </div>
+            
+            <div class="control-group">
+                <button id="sendTextBtn" onclick="sendText()" disabled>Send Text</button>
+                <button id="sendBinaryBtn" onclick="sendBinary()" disabled>Send Binary</button>
+                <button id="clearBtn" onclick="clearMessages()">Clear Messages</button>
+            </div>
+            
+            <h3>Binary Data</h3>
+            <div class="control-group">
+                <input type="text" id="binarySize" value="1024" placeholder="Binary size (bytes)">
+                <button onclick="generateBinary()">Generate Random Binary</button>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Messages</h2>
+            <div class="messages" id="messages"></div>
+            
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="messagesSent">0</div>
+                    <div class="stat-label">Messages Sent</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="messagesReceived">0</div>
+                    <div class="stat-label">Messages Received</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="bytesTransferred">0</div>
+                    <div class="stat-label">Bytes Transferred</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let connectionId = null;
+        let stats = {
+            sent: 0,
+            received: 0,
+            bytes: 0
+        };
+        
+        // Update UI elements
+        const statusEl = document.getElementById('connectionStatus');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const sendTextBtn = document.getElementById('sendTextBtn');
+        const sendBinaryBtn = document.getElementById('sendBinaryBtn');
+        const messagesEl = document.getElementById('messages');
+        const messageTypeEl = document.getElementById('messageType');
+        const messageDataEl = document.getElementById('messageData');
+        
+        // Update stats display
+        function updateStats() {
+            document.getElementById('messagesSent').textContent = stats.sent;
+            document.getElementById('messagesReceived').textContent = stats.received;
+            document.getElementById('bytesTransferred').textContent = formatBytes(stats.bytes);
+        }
+        
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / 1048576).toFixed(2) + ' MB';
+        }
+        
+        // Add message to display
+        function addMessage(content, type = 'received') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = typeof content === 'object' ? JSON.stringify(content, null, 2) : content;
+            messagesEl.appendChild(messageDiv);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        
+        // Update connection status
+        function updateStatus(status) {
+            statusEl.textContent = status;
+            statusEl.className = 'status ' + status.toLowerCase();
+            
+            const isConnected = status === 'Connected';
+            connectBtn.disabled = isConnected;
+            disconnectBtn.disabled = !isConnected;
+            sendTextBtn.disabled = !isConnected;
+            sendBinaryBtn.disabled = !isConnected;
+        }
+        
+        // Connect to WebSocket
+        function connect() {
+            const url = document.getElementById('wsUrl').value;
+            
+            try {
+                updateStatus('Connecting');
+                addMessage('Connecting to ' + url, 'system');
+                
+                socket = new WebSocket(url);
+                
+                socket.onopen = (event) => {
+                    updateStatus('Connected');
+                    addMessage('WebSocket connection established', 'system');
+                };
+                
+                socket.onmessage = (event) => {
+                    stats.received++;
+                    
+                    if (event.data instanceof Blob) {
+                        // Handle binary data
+                        event.data.arrayBuffer().then(buffer => {
+                            stats.bytes += buffer.byteLength;
+                            const view = new DataView(buffer);
+                            const headerSize = view.getInt32(0, true);
+                            addMessage(`Binary message received: ${buffer.byteLength} bytes (header: ${headerSize})`, 'received');
+                            updateStats();
+                        });
+                    } else {
+                        // Handle text data
+                        stats.bytes += event.data.length;
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.connectionId) {
+                                connectionId = data.connectionId;
+                            }
+                            addMessage(data, 'received');
+                        } catch (e) {
+                            addMessage(event.data, 'received');
+                        }
+                        updateStats();
+                    }
+                };
+                
+                socket.onerror = (event) => {
+                    addMessage('WebSocket error occurred', 'error');
+                };
+                
+                socket.onclose = (event) => {
+                    updateStatus('Disconnected');
+                    addMessage(`WebSocket closed: ${event.reason || 'No reason provided'} (code: ${event.code})`, 'system');
+                    socket = null;
+                    connectionId = null;
+                };
+                
+            } catch (error) {
+                addMessage('Failed to connect: ' + error.message, 'error');
+                updateStatus('Disconnected');
+            }
+        }
+        
+        // Disconnect from WebSocket
+        function disconnect() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close(1000, 'User disconnected');
+            }
+        }
+        
+        // Send text message
+        function sendText() {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                addMessage('WebSocket is not connected', 'error');
+                return;
+            }
+            
+            try {
+                let message;
+                const messageType = messageTypeEl.value;
+                
+                if (messageType === 'custom') {
+                    message = messageDataEl.value;
+                } else {
+                    const data = messageDataEl.value || 'Test message';
+                    message = JSON.stringify({
+                        type: messageType,
+                        data: data
+                    });
+                }
+                
+                socket.send(message);
+                stats.sent++;
+                stats.bytes += message.length;
+                addMessage(message, 'sent');
+                updateStats();
+                
+            } catch (error) {
+                addMessage('Failed to send message: ' + error.message, 'error');
+            }
+        }
+        
+        // Send binary message
+        function sendBinary() {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                addMessage('WebSocket is not connected', 'error');
+                return;
+            }
+            
+            try {
+                const size = parseInt(document.getElementById('binarySize').value) || 1024;
+                const buffer = new ArrayBuffer(size);
+                const view = new Uint8Array(buffer);
+                
+                // Fill with random data
+                for (let i = 0; i < size; i++) {
+                    view[i] = Math.floor(Math.random() * 256);
+                }
+                
+                socket.send(buffer);
+                stats.sent++;
+                stats.bytes += size;
+                addMessage(`Binary message sent: ${size} bytes`, 'sent');
+                updateStats();
+                
+            } catch (error) {
+                addMessage('Failed to send binary: ' + error.message, 'error');
+            }
+        }
+        
+        // Generate random binary data
+        function generateBinary() {
+            const size = parseInt(document.getElementById('binarySize').value) || 1024;
+            messageDataEl.value = `Binary data: ${size} bytes`;
+        }
+        
+        // Clear messages
+        function clearMessages() {
+            messagesEl.innerHTML = '';
+        }
+        
+        // Update message template based on type
+        messageTypeEl.addEventListener('change', (e) => {
+            const templates = {
+                'ping': '{"type": "ping"}',
+                'echo': '{"type": "echo", "data": "Hello, WebSocket!"}',
+                'broadcast': '{"type": "broadcast", "data": "Broadcast message to all clients"}',
+                'binary-request': '{"type": "binary-request"}',
+                'custom': '{"type": "custom", "data": {}}'
+            };
+            
+            if (templates[e.target.value]) {
+                messageDataEl.value = templates[e.target.value];
+            }
+        });
+        
+        // Initialize with ping template
+        messageDataEl.value = '{"type": "ping"}';
+    </script>
+</body>
+</html>
