@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Puzzle Platform - Documentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 60px 0; }
+        .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-5px); }
+        .tech-badge { display: inline-block; padding: 4px 12px; margin: 2px; background: #f3f4f6; border-radius: 12px; font-size: 0.875rem; }
+        .sidebar { position: sticky; top: 20px; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        .nav-link { color: #6b7280; }
+        .nav-link:hover { color: #667eea; }
+        .nav-link.active { color: #667eea; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <div class="container">
+            <h1 class="display-4 fw-bold mb-3">Collaborative Puzzle Platform</h1>
+            <p class="lead mb-4">A comprehensive real-time collaborative application demonstrating modern .NET 8 development practices</p>
+            <div class="d-flex gap-3">
+                <a href="https://github.com/dbbuilder/puzzle-tutorial" class="btn btn-light"><i class="fab fa-github"></i> View on GitHub</a>
+                <a href="#getting-started" class="btn btn-outline-light">Get Started</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container my-5">
+        <div class="row">
+            <div class="col-lg-3">
+                <div class="sidebar">
+                    <h5 class="mb-3">Documentation</h5>
+                    <nav class="nav flex-column">
+                        <a class="nav-link active" href="#overview">Overview</a>
+                        <a class="nav-link" href="#features">Features</a>
+                        <a class="nav-link" href="#architecture">Architecture</a>
+                        <a class="nav-link" href="#getting-started">Getting Started</a>
+                        <a class="nav-link" href="#real-time">Real-Time Protocols</a>
+                        <a class="nav-link" href="#deployment">Deployment</a>
+                        <a class="nav-link" href="#api">API Documentation</a>
+                        <a class="nav-link" href="#monitoring">Monitoring</a>
+                    </nav>
+                    
+                    <h5 class="mb-3 mt-4">Resources</h5>
+                    <nav class="nav flex-column">
+                        <a class="nav-link" href="CODE_SAMPLES.html">Code Samples</a>
+                        <a class="nav-link" href="KUBERNETES_ARCHITECTURE.html">K8s Architecture</a>
+                        <a class="nav-link" href="MQTT_IOT_GUIDE.html">IoT Integration</a>
+                        <a class="nav-link" href="WEBRTC_GUIDE.html">WebRTC Guide</a>
+                        <a class="nav-link" href="WARNING_ANALYSIS.html">Code Quality</a>
+                    </nav>
+                </div>
+            </div>
+            
+            <div class="col-lg-9">
+                <section id="overview" class="mb-5">
+                    <h2 class="mb-4">Project Overview</h2>
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="card h-100 p-4">
+                                <h5><i class="fas fa-code text-primary"></i> Code Statistics</h5>
+                                <ul class="list-unstyled mt-3">
+                                    <li><strong>10,592</strong> lines of C# code</li>
+                                    <li><strong>63</strong> source files</li>
+                                    <li><strong>38</strong> documentation files</li>
+                                    <li><strong>18</strong> K8s manifests</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100 p-4">
+                                <h5><i class="fas fa-rocket text-success"></i> Technologies</h5>
+                                <div class="mt-3">
+                                    <span class="tech-badge">.NET 8</span>
+                                    <span class="tech-badge">SignalR</span>
+                                    <span class="tech-badge">WebRTC</span>
+                                    <span class="tech-badge">MQTT</span>
+                                    <span class="tech-badge">Docker</span>
+                                    <span class="tech-badge">Kubernetes</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100 p-4">
+                                <h5><i class="fas fa-check-circle text-info"></i> Status</h5>
+                                <ul class="list-unstyled mt-3">
+                                    <li>✅ Build Passing</li>
+                                    <li>✅ Docker Ready</li>
+                                    <li>✅ K8s Manifests</li>
+                                    <li>✅ v1.0.0 Released</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="features" class="mb-5">
+                    <h2 class="mb-4">Key Features</h2>
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <h5>🚀 Real-Time Communication</h5>
+                            <ul>
+                                <li>SignalR Hub with Redis backplane</li>
+                                <li>Raw WebSocket implementation</li>
+                                <li>WebRTC signaling server</li>
+                                <li>MQTT for IoT devices</li>
+                                <li>Socket.IO compatibility layer</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>☁️ Cloud-Native</h5>
+                            <ul>
+                                <li>Kubernetes deployment manifests</li>
+                                <li>Horizontal pod autoscaling</li>
+                                <li>Health checks and probes</li>
+                                <li>Network policies</li>
+                                <li>Service mesh ready</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="getting-started" class="mb-5">
+                    <h2 class="mb-4">Getting Started</h2>
+                    <div class="card p-4">
+                        <h5>Quick Start with Docker Compose</h5>
+                        <pre><code># Clone the repository
+git clone https://github.com/dbbuilder/puzzle-tutorial.git
+cd puzzle-tutorial
+
+# Start all services
+docker-compose up -d
+
+# Access the API
+curl http://localhost:5000/health</code></pre>
+                        
+                        <h5 class="mt-4">Deploy to Kubernetes</h5>
+                        <pre><code># Deploy to development environment
+kubectl apply -k k8s/overlays/dev/
+
+# Check deployment status
+kubectl get pods -n puzzle-platform
+
+# Access via port-forward
+kubectl port-forward -n puzzle-platform svc/puzzle-api-service 8080:80</code></pre>
+                    </div>
+                </section>
+
+                <section id="real-time" class="mb-5">
+                    <h2 class="mb-4">Real-Time Protocols</h2>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Protocol</th>
+                                    <th>Endpoint</th>
+                                    <th>Use Case</th>
+                                    <th>Documentation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>SignalR</strong></td>
+                                    <td><code>/puzzlehub</code></td>
+                                    <td>Primary real-time communication</td>
+                                    <td><a href="CODE_SAMPLES.html#signalr">View Examples</a></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>WebSocket</strong></td>
+                                    <td><code>/ws</code></td>
+                                    <td>Low-level binary/text messaging</td>
+                                    <td><a href="WEBSOCKET_PROTOCOL.html">Protocol Guide</a></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>WebRTC</strong></td>
+                                    <td><code>/webrtchub</code></td>
+                                    <td>Peer-to-peer connections</td>
+                                    <td><a href="WEBRTC_GUIDE.html">WebRTC Guide</a></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>MQTT</strong></td>
+                                    <td><code>ws://localhost:9001</code></td>
+                                    <td>IoT device integration</td>
+                                    <td><a href="MQTT_IOT_GUIDE.html">MQTT Guide</a></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Socket.IO</strong></td>
+                                    <td><code>/socket.io</code></td>
+                                    <td>Legacy client support</td>
+                                    <td><a href="SOCKETIO_COMPATIBILITY.html">Compatibility</a></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="documentation-list" class="mb-5">
+                    <h2 class="mb-4">Documentation Index</h2>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <h5>Architecture & Design</h5>
+                            <ul class="list-unstyled">
+                                <li>📄 <a href="ENTERPRISE_PATTERNS.html">Enterprise Patterns</a></li>
+                                <li>📄 <a href="KUBERNETES_ARCHITECTURE.html">Kubernetes Architecture</a></li>
+                                <li>📄 <a href="MONITORING_OBSERVABILITY.html">Monitoring & Observability</a></li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Implementation Guides</h5>
+                            <ul class="list-unstyled">
+                                <li>📄 <a href="MINIMAL_API_IMPLEMENTATION.html">Minimal API Implementation</a></li>
+                                <li>📄 <a href="CONFIGURATION_FILES_GUIDE.html">Configuration Guide</a></li>
+                                <li>📄 <a href="PRODUCTION_DEPLOYMENT.html">Production Deployment</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-light py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-0">Collaborative Puzzle Platform v1.0.0 | <a href="https://github.com/dbbuilder/puzzle-tutorial">GitHub</a></p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

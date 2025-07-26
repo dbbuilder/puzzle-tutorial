@@ -1,33 +1,23 @@
-# Collaborative Jigsaw Puzzle Platform
+# Collaborative Puzzle Platform
 
-## 📚 Interactive Learning Guide
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/dbbuilder/puzzle-tutorial/releases/tag/v1.0.0)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**New to the project? Start with our interactive documentation viewer!**
+A comprehensive real-time collaborative application demonstrating modern .NET 8 development practices, featuring multiple real-time communication protocols and cloud-native deployment strategies.
 
-🚀 **[View the Interactive Learning Guide](https://dbbuilder.github.io/puzzle-tutorial/github-learning-guide.html)**
+## 📚 Documentation
 
-Our comprehensive learning guide provides:
-- ✅ Auto-discovered documentation from this repository
-- ✅ Embedded learning resources and implementation checklists
-- ✅ Complete bibliography with links to official docs
-- ✅ Enterprise architecture patterns with code examples
-- ✅ Step-by-step deployment guides
-- ✅ 850+ lines of production-ready code samples
-
-**No installation required** - just open in your browser and start learning!
-
----
+Browse the full documentation at: **[https://dbbuilder.github.io/puzzle-tutorial/docs/](https://dbbuilder.github.io/puzzle-tutorial/docs/)**
 
 ## 🧩 Project Overview
 
-A real-time collaborative jigsaw puzzle application built with ASP.NET Core, SignalR, WebRTC, Redis, and Vue.js. Multiple users can simultaneously work on digital puzzles with live synchronization, voice chat, and persistent state management.
-
-This project serves as a comprehensive example of building enterprise-grade applications with modern technologies, demonstrating:
-- Microservices architecture
-- Real-time communication at scale
-- Cloud-native deployment
-- Enterprise design patterns
-- Production monitoring and observability
+A real-time collaborative jigsaw puzzle application showcasing:
+- **Multi-Protocol Communication**: SignalR, WebSocket, WebRTC, MQTT, Socket.IO
+- **Cloud-Native Architecture**: Kubernetes-ready with full observability
+- **Modern .NET**: Clean Architecture with Minimal APIs
+- **Enterprise Patterns**: Repository pattern, DI, and best practices
+- **Production Ready**: Health checks, monitoring, and scalability
 
 ## 🎯 Learning Objectives
 
