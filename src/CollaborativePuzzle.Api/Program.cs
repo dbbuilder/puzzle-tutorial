@@ -7,6 +7,7 @@ using StackExchange.Redis;
 using CollaborativePuzzle.Api.MinimalApis;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using CollaborativePuzzle.Api.Extensions;
+using CollaborativePuzzle.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -115,6 +116,7 @@ app.UseSocketIO();
 
 app.UseRouting();
 app.UseAuthentication();
+app.UseApiKeyAuthentication(); // Add API key authentication
 app.UseAuthorization();
 
 // Map traditional endpoints

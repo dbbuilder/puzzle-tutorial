@@ -2,6 +2,8 @@ using System.Text;
 using CollaborativePuzzle.Api.Authentication;
 using CollaborativePuzzle.Api.Authorization;
 using CollaborativePuzzle.Core.Interfaces;
+using CollaborativePuzzle.Core.Models;
+using CollaborativePuzzle.Infrastructure.Repositories;
 using CollaborativePuzzle.Infrastructure.Services;
 using JwtSettings = CollaborativePuzzle.Api.Extensions.JwtSettings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -34,6 +36,8 @@ public static class AuthenticationExtensions
         // Add authentication services
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IApiKeyService, ApiKeyService>();
+        services.AddScoped<IApiKeyRepository, MinimalApiKeyRepository>(); // Using minimal implementation for now
         
         // Add Azure AD B2C service if configured
         if (azureAdB2CSettings != null && !string.IsNullOrEmpty(azureAdB2CSettings.ClientId))
@@ -93,6 +97,7 @@ public static class AuthenticationExtensions
         // Add authorization handlers
         services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, PuzzleOwnerAuthorizationHandler>();
+        services.AddScoped<IAuthorizationHandler, ApiKeyScopeAuthorizationHandler>();
         
         // Configure authorization policies
         services.AddAuthorization(options =>
@@ -104,6 +109,13 @@ public static class AuthenticationExtensions
             
             // Custom policies
             options.AddPolicy(PuzzlePolicies.PuzzleOwnerPolicyName, PuzzlePolicies.PuzzleOwnerPolicy);
+            
+            // API key scope policies
+            foreach (var scope in ApiScopes.AllScopes)
+            {
+                options.AddPolicy($"ApiScope:{scope}", policy =>
+                    policy.AddRequirements(new ApiKeyScopeRequirement(scope)));
+            }
         });
         
         return services;
