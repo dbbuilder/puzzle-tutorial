@@ -24106,3 +24106,990 @@ URI Configuration Best Practices:
 ```
 
 The URI constructor's ability to parse configuration strings makes it easy to externalize service endpoints, supporting various deployment scenarios from local development to production microservices environments. The key is proper validation and error handling to ensure robust service communication.
+
+## Q45: What does httpClientFactory do?
+
+### Answer:
+
+`IHttpClientFactory` is a factory abstraction in .NET Core that solves critical problems with `HttpClient` usage, including socket exhaustion, DNS changes handling, and lifecycle management. It was introduced to address the common pitfalls developers face when using `HttpClient` incorrectly.
+
+### Problems HttpClientFactory Solves
+
+#### 1. Socket Exhaustion Problem
+```csharp
+// ❌ BAD: Creates new HttpClient for each request
+public class BadApiService
+{
+    public async Task<string> GetDataAsync(int id)
+    {
+        using (var client = new HttpClient()) // DON'T DO THIS!
+        {
+            // Each HttpClient holds onto a socket for a while after disposal
+            // Leading to socket exhaustion under load
+            var response = await client.GetAsync($"https://api.example.com/data/{id}");
+            return await response.Content.ReadAsStringAsync();
+        }
+    }
+}
+
+// Socket exhaustion symptoms:
+// - SocketException: Only one usage of each socket address is normally permitted
+// - Unable to connect to the remote server
+// - System.Net.Http.HttpRequestException
+```
+
+#### 2. DNS Changes Problem
+```csharp
+// ❌ BAD: Static HttpClient doesn't respect DNS changes
+public class ProblematicApiService
+{
+    // This client never picks up DNS changes
+    private static readonly HttpClient _client = new HttpClient();
+    
+    public async Task<string> GetDataAsync(int id)
+    {
+        // If the API endpoint's IP changes, this client won't know
+        var response = await _client.GetAsync($"https://api.example.com/data/{id}");
+        return await response.Content.ReadAsStringAsync();
+    }
+}
+```
+
+### How HttpClientFactory Works
+
+#### 1. Basic Usage
+```csharp
+// Startup.cs / Program.cs
+builder.Services.AddHttpClient();
+
+// Service using IHttpClientFactory
+public class ApiService
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+    
+    public ApiService(IHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
+    
+    public async Task<string> GetDataAsync(int id)
+    {
+        // ✅ GOOD: Factory manages the HttpClient lifecycle
+        var client = _httpClientFactory.CreateClient();
+        
+        var response = await client.GetAsync($"https://api.example.com/data/{id}");
+        response.EnsureSuccessStatusCode();
+        
+        return await response.Content.ReadAsStringAsync();
+    }
+}
+```
+
+#### 2. Named Clients
+```csharp
+// Configure named clients with specific settings
+builder.Services.AddHttpClient("GitHub", client =>
+{
+    client.BaseAddress = new Uri("https://api.github.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+    client.DefaultRequestHeaders.Add("User-Agent", "PuzzleApp");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+builder.Services.AddHttpClient("MediaService", client =>
+{
+    client.BaseAddress = new Uri("https://media.puzzle.com/");
+    client.DefaultRequestHeaders.Add("X-API-Version", "2.0");
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+    MaxConnectionsPerServer = 10
+});
+
+// Usage
+public class GitHubService
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+    
+    public async Task<Repository> GetRepositoryAsync(string owner, string repo)
+    {
+        var client = _httpClientFactory.CreateClient("GitHub");
+        
+        var response = await client.GetAsync($"repos/{owner}/{repo}");
+        response.EnsureSuccessStatusCode();
+        
+        return await response.Content.ReadFromJsonAsync<Repository>();
+    }
+}
+```
+
+#### 3. Typed Clients
+```csharp
+// Define a typed client interface
+public interface IPuzzleApiClient
+{
+    Task<Puzzle> GetPuzzleAsync(int id);
+    Task<IEnumerable<Puzzle>> GetPuzzlesAsync();
+    Task<Puzzle> CreatePuzzleAsync(CreatePuzzleRequest request);
+}
+
+// Implement the typed client
+public class PuzzleApiClient : IPuzzleApiClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<PuzzleApiClient> _logger;
+    
+    public PuzzleApiClient(HttpClient httpClient, ILogger<PuzzleApiClient> logger)
+    {
+        _httpClient = httpClient;
+        _logger = logger;
+    }
+    
+    public async Task<Puzzle> GetPuzzleAsync(int id)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"puzzles/{id}");
+            response.EnsureSuccessStatusCode();
+            
+            return await response.Content.ReadFromJsonAsync<Puzzle>()
+                ?? throw new InvalidOperationException("Puzzle not found");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Error fetching puzzle {PuzzleId}", id);
+            throw;
+        }
+    }
+    
+    public async Task<IEnumerable<Puzzle>> GetPuzzlesAsync()
+    {
+        var response = await _httpClient.GetAsync("puzzles");
+        response.EnsureSuccessStatusCode();
+        
+        return await response.Content.ReadFromJsonAsync<IEnumerable<Puzzle>>()
+            ?? Enumerable.Empty<Puzzle>();
+    }
+    
+    public async Task<Puzzle> CreatePuzzleAsync(CreatePuzzleRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("puzzles", request);
+        response.EnsureSuccessStatusCode();
+        
+        return await response.Content.ReadFromJsonAsync<Puzzle>()
+            ?? throw new InvalidOperationException("Failed to create puzzle");
+    }
+}
+
+// Register typed client
+builder.Services.AddHttpClient<IPuzzleApiClient, PuzzleApiClient>(client =>
+{
+    client.BaseAddress = new Uri("https://api.puzzle.com/v1/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+})
+.AddPolicyHandler(GetRetryPolicy())
+.AddPolicyHandler(GetCircuitBreakerPolicy());
+```
+
+### Advanced Features
+
+#### 1. Message Handlers
+```csharp
+// Custom message handler for authentication
+public class AuthenticationHandler : DelegatingHandler
+{
+    private readonly ITokenService _tokenService;
+    
+    public AuthenticationHandler(ITokenService tokenService)
+    {
+        _tokenService = tokenService;
+    }
+    
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, 
+        CancellationToken cancellationToken)
+    {
+        var token = await _tokenService.GetTokenAsync();
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        
+        return await base.SendAsync(request, cancellationToken);
+    }
+}
+
+// Logging handler
+public class LoggingHandler : DelegatingHandler
+{
+    private readonly ILogger<LoggingHandler> _logger;
+    
+    public LoggingHandler(ILogger<LoggingHandler> logger)
+    {
+        _logger = logger;
+    }
+    
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, 
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Request: {Method} {Uri}", 
+            request.Method, request.RequestUri);
+        
+        var stopwatch = Stopwatch.StartNew();
+        var response = await base.SendAsync(request, cancellationToken);
+        stopwatch.Stop();
+        
+        _logger.LogInformation("Response: {StatusCode} in {ElapsedMs}ms", 
+            response.StatusCode, stopwatch.ElapsedMilliseconds);
+        
+        return response;
+    }
+}
+
+// Register handlers
+builder.Services.AddTransient<AuthenticationHandler>();
+builder.Services.AddTransient<LoggingHandler>();
+
+builder.Services.AddHttpClient<IPuzzleApiClient, PuzzleApiClient>()
+    .AddHttpMessageHandler<AuthenticationHandler>()
+    .AddHttpMessageHandler<LoggingHandler>();
+```
+
+#### 2. Polly Integration
+```csharp
+// Install: Microsoft.Extensions.Http.Polly
+
+// Configure retry policy
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError() // 408, 5XX
+        .OrResult(msg => !msg.IsSuccessStatusCode)
+        .WaitAndRetryAsync(
+            3,
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetry: (outcome, timespan, retryCount, context) =>
+            {
+                var logger = context.Values["logger"] as ILogger;
+                logger?.LogWarning("Retry {RetryCount} after {Delay}ms", 
+                    retryCount, timespan.TotalMilliseconds);
+            });
+}
+
+// Configure circuit breaker
+static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .CircuitBreakerAsync(
+            handledEventsAllowedBeforeBreaking: 3,
+            durationOfBreak: TimeSpan.FromSeconds(30),
+            onBreak: (result, duration) =>
+            {
+                // Log circuit breaker open
+            },
+            onReset: () =>
+            {
+                // Log circuit breaker reset
+            });
+}
+
+// Apply policies
+builder.Services.AddHttpClient<IWeatherService, WeatherService>()
+    .AddPolicyHandler(GetRetryPolicy())
+    .AddPolicyHandler(GetCircuitBreakerPolicy());
+```
+
+#### 3. HttpClient Configuration
+```csharp
+builder.Services.AddHttpClient<IMediaService, MediaService>(client =>
+{
+    client.BaseAddress = new Uri("https://media.puzzle.com/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("X-API-Key", "your-api-key");
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+    UseCookies = false,
+    UseDefaultCredentials = false,
+    AllowAutoRedirect = false,
+    MaxConnectionsPerServer = 10,
+    MaxResponseHeadersLength = 64 * 1024, // 64KB
+    SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+})
+.SetHandlerLifetime(TimeSpan.FromMinutes(5)); // Default is 2 minutes
+```
+
+### Under the Hood
+
+#### 1. Handler Pool Management
+```csharp
+// HttpClientFactory maintains a pool of HttpMessageHandler instances
+// These are the expensive resources that actually manage connections
+
+// Simplified view of what happens internally:
+public class HttpClientFactoryInternals
+{
+    private readonly ConcurrentDictionary<string, HttpMessageHandler> _handlers;
+    private readonly IOptionsMonitor<HttpClientFactoryOptions> _options;
+    
+    public HttpClient CreateClient(string name)
+    {
+        // 1. Get or create a handler from the pool
+        var handler = GetHandler(name);
+        
+        // 2. Create a new HttpClient with the pooled handler
+        var client = new HttpClient(handler, disposeHandler: false);
+        
+        // 3. Apply configuration
+        var options = _options.Get(name);
+        options.ConfigureClient(client);
+        
+        return client;
+    }
+}
+```
+
+#### 2. Handler Rotation
+```csharp
+// Handlers are rotated based on HandlerLifetime (default: 2 minutes)
+// This solves the DNS change problem while avoiding socket exhaustion
+
+// After HandlerLifetime expires:
+// 1. New HttpClients get a fresh handler
+// 2. Old handler remains alive until all its HttpClients are GC'd
+// 3. Connections are gracefully cycled
+```
+
+### Best Practices
+
+```yaml
+HttpClientFactory Best Practices:
+  1. Always Use Factory:
+     - Never create HttpClient directly
+     - Use typed clients for service-specific APIs
+     - Use named clients for different configurations
+     
+  2. Configuration:
+     - Set appropriate timeouts
+     - Configure base addresses
+     - Add default headers
+     - Use message handlers for cross-cutting concerns
+     
+  3. Error Handling:
+     - Implement retry policies
+     - Add circuit breakers
+     - Log requests/responses
+     - Handle transient failures
+     
+  4. Performance:
+     - Reuse HttpClient instances from factory
+     - Configure connection limits
+     - Enable compression
+     - Set appropriate handler lifetime
+     
+  5. Security:
+     - Store API keys securely
+     - Use HTTPS
+     - Validate certificates
+     - Implement authentication handlers
+```
+
+### Common Patterns
+
+#### 1. API Gateway Pattern
+```csharp
+public interface IApiGateway
+{
+    Task<T> GetAsync<T>(string service, string path);
+    Task<T> PostAsync<T>(string service, string path, object data);
+}
+
+public class ApiGateway : IApiGateway
+{
+    private readonly IHttpClientFactory _factory;
+    private readonly IServiceDiscovery _discovery;
+    
+    public async Task<T> GetAsync<T>(string service, string path)
+    {
+        var client = _factory.CreateClient();
+        var baseUrl = await _discovery.GetServiceUrlAsync(service);
+        
+        var response = await client.GetAsync($"{baseUrl}/{path}");
+        response.EnsureSuccessStatusCode();
+        
+        return await response.Content.ReadFromJsonAsync<T>();
+    }
+}
+```
+
+#### 2. Correlation ID Pattern
+```csharp
+public class CorrelationIdHandler : DelegatingHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, 
+        CancellationToken cancellationToken)
+    {
+        var correlationId = Activity.Current?.Id ?? Guid.NewGuid().ToString();
+        request.Headers.Add("X-Correlation-ID", correlationId);
+        
+        return base.SendAsync(request, cancellationToken);
+    }
+}
+```
+
+`IHttpClientFactory` is essential for any modern .NET application making HTTP calls. It manages the complex lifecycle of HTTP connections, prevents common pitfalls, and provides a clean abstraction for configuring and using HTTP clients correctly.
+
+## Q46: What does IConnectionMultiplexer do? Is it redis-specific? What does EventBus do? How does it connect to IConnectionMultiplexer?
+
+### Answer:
+
+`IConnectionMultiplexer` is the central connection abstraction in StackExchange.Redis that manages connections to Redis servers. It is Redis-specific and handles connection pooling, reconnection logic, and command routing. The EventBus pattern often uses Redis (via IConnectionMultiplexer) as a message broker for distributed event handling.
+
+### Understanding IConnectionMultiplexer
+
+#### 1. Core Responsibilities
+```csharp
+// IConnectionMultiplexer manages:
+// - Physical connections to Redis servers
+// - Automatic reconnection on failures
+// - Command pipelining and multiplexing
+// - Pub/Sub subscriptions
+// - Connection configuration
+
+public interface IConnectionMultiplexer : IDisposable
+{
+    // Get database instance (thread-safe, lightweight)
+    IDatabase GetDatabase(int db = -1, object? asyncState = null);
+    
+    // Get subscriber for pub/sub
+    ISubscriber GetSubscriber(object? asyncState = null);
+    
+    // Get server for admin commands
+    IServer GetServer(string host, int port);
+    IServer GetServer(EndPoint endpoint);
+    
+    // Connection events
+    event EventHandler<ConnectionFailedEventArgs> ConnectionFailed;
+    event EventHandler<ConnectionFailedEventArgs> ConnectionRestored;
+    event EventHandler<RedisErrorEventArgs> ErrorMessage;
+    
+    // Connection state
+    bool IsConnected { get; }
+    string Configuration { get; }
+}
+```
+
+#### 2. Creating and Configuring
+```csharp
+// Basic connection
+var redis = ConnectionMultiplexer.Connect("localhost:6379");
+
+// Advanced configuration
+var options = new ConfigurationOptions
+{
+    EndPoints = 
+    { 
+        { "redis1.example.com", 6379 },
+        { "redis2.example.com", 6379 }
+    },
+    Password = "your-redis-password",
+    Ssl = true,
+    AbortOnConnectFail = false, // Important for resiliency
+    ConnectTimeout = 5000,
+    SyncTimeout = 5000,
+    AsyncTimeout = 5000,
+    KeepAlive = 180,
+    ConnectRetry = 3,
+    DefaultDatabase = 0,
+    ClientName = "PuzzleApp",
+    AllowAdmin = false, // Disable dangerous commands
+    CommandMap = CommandMap.Default, // Can disable specific commands
+};
+
+var redis = ConnectionMultiplexer.Connect(options);
+
+// Connection string format
+var redis2 = ConnectionMultiplexer.Connect(
+    "redis1.example.com:6379,redis2.example.com:6379," +
+    "password=your-password,ssl=true,abortConnect=false"
+);
+```
+
+#### 3. Dependency Injection Setup
+```csharp
+// Program.cs / Startup.cs
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var connectionString = configuration.GetConnectionString("Redis") 
+        ?? "localhost:6379";
+    
+    var options = ConfigurationOptions.Parse(connectionString);
+    options.AbortOnConnectFail = false;
+    
+    var multiplexer = ConnectionMultiplexer.Connect(options);
+    
+    // Set up connection events
+    multiplexer.ConnectionFailed += (sender, args) =>
+    {
+        var logger = sp.GetService<ILogger<Program>>();
+        logger?.LogError("Redis connection failed: {FailureType}", args.FailureType);
+    };
+    
+    multiplexer.ConnectionRestored += (sender, args) =>
+    {
+        var logger = sp.GetService<ILogger<Program>>();
+        logger?.LogInformation("Redis connection restored");
+    };
+    
+    return multiplexer;
+});
+
+// Register services that use Redis
+builder.Services.AddScoped<IRedisService, RedisService>();
+builder.Services.AddSingleton<IEventBus, RedisEventBus>();
+```
+
+### IConnectionMultiplexer Usage Patterns
+
+#### 1. Database Operations
+```csharp
+public class RedisService
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly IDatabase _db;
+    
+    public RedisService(IConnectionMultiplexer redis)
+    {
+        _redis = redis;
+        _db = redis.GetDatabase();
+    }
+    
+    // String operations
+    public async Task<string?> GetAsync(string key)
+    {
+        return await _db.StringGetAsync(key);
+    }
+    
+    public async Task SetAsync(string key, string value, TimeSpan? expiry = null)
+    {
+        await _db.StringSetAsync(key, value, expiry);
+    }
+    
+    // Hash operations
+    public async Task<HashEntry[]> GetHashAsync(string key)
+    {
+        return await _db.HashGetAllAsync(key);
+    }
+    
+    // List operations
+    public async Task<long> AddToListAsync(string key, string value)
+    {
+        return await _db.ListRightPushAsync(key, value);
+    }
+    
+    // Set operations
+    public async Task<bool> AddToSetAsync(string key, string value)
+    {
+        return await _db.SetAddAsync(key, value);
+    }
+    
+    // Sorted set operations
+    public async Task<bool> AddToSortedSetAsync(string key, string member, double score)
+    {
+        return await _db.SortedSetAddAsync(key, member, score);
+    }
+}
+```
+
+#### 2. Pub/Sub Operations
+```csharp
+public class RedisPubSubService
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly ISubscriber _subscriber;
+    
+    public RedisPubSubService(IConnectionMultiplexer redis)
+    {
+        _redis = redis;
+        _subscriber = redis.GetSubscriber();
+    }
+    
+    public async Task PublishAsync(string channel, string message)
+    {
+        await _subscriber.PublishAsync(channel, message);
+    }
+    
+    public async Task SubscribeAsync(string channel, Action<string> handler)
+    {
+        await _subscriber.SubscribeAsync(channel, (ch, message) =>
+        {
+            handler(message!);
+        });
+    }
+    
+    public async Task UnsubscribeAsync(string channel)
+    {
+        await _subscriber.UnsubscribeAsync(channel);
+    }
+}
+```
+
+### EventBus Pattern with Redis
+
+#### 1. EventBus Interface
+```csharp
+public interface IEventBus
+{
+    Task PublishAsync<T>(T @event) where T : IntegrationEvent;
+    Task SubscribeAsync<T, TH>() 
+        where T : IntegrationEvent
+        where TH : IIntegrationEventHandler<T>;
+    Task UnsubscribeAsync<T, TH>()
+        where T : IntegrationEvent
+        where TH : IIntegrationEventHandler<T>;
+}
+
+public abstract class IntegrationEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
+    public string EventType => GetType().Name;
+}
+
+public interface IIntegrationEventHandler<in TIntegrationEvent>
+    where TIntegrationEvent : IntegrationEvent
+{
+    Task Handle(TIntegrationEvent @event);
+}
+```
+
+#### 2. Redis EventBus Implementation
+```csharp
+public class RedisEventBus : IEventBus, IDisposable
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly ISubscriber _subscriber;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<RedisEventBus> _logger;
+    private readonly Dictionary<string, List<Type>> _handlers;
+    private readonly SemaphoreSlim _semaphore;
+    
+    public RedisEventBus(
+        IConnectionMultiplexer redis,
+        IServiceProvider serviceProvider,
+        ILogger<RedisEventBus> logger)
+    {
+        _redis = redis;
+        _subscriber = redis.GetSubscriber();
+        _serviceProvider = serviceProvider;
+        _logger = logger;
+        _handlers = new Dictionary<string, List<Type>>();
+        _semaphore = new SemaphoreSlim(1, 1);
+    }
+    
+    public async Task PublishAsync<T>(T @event) where T : IntegrationEvent
+    {
+        var eventName = @event.EventType;
+        var message = JsonSerializer.Serialize(@event);
+        
+        _logger.LogInformation("Publishing event {EventName}: {EventId}", 
+            eventName, @event.Id);
+        
+        await _subscriber.PublishAsync(eventName, message);
+    }
+    
+    public async Task SubscribeAsync<T, TH>()
+        where T : IntegrationEvent
+        where TH : IIntegrationEventHandler<T>
+    {
+        var eventName = typeof(T).Name;
+        
+        await _semaphore.WaitAsync();
+        try
+        {
+            if (!_handlers.ContainsKey(eventName))
+            {
+                _handlers[eventName] = new List<Type>();
+                
+                // Subscribe to Redis channel
+                await _subscriber.SubscribeAsync(eventName, async (channel, message) =>
+                {
+                    await ProcessEvent(eventName, message);
+                });
+            }
+            
+            _handlers[eventName].Add(typeof(TH));
+            
+            _logger.LogInformation("Subscribed {Handler} to {EventName}", 
+                typeof(TH).Name, eventName);
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+    
+    private async Task ProcessEvent(string eventName, string message)
+    {
+        _logger.LogInformation("Processing event {EventName}", eventName);
+        
+        if (!_handlers.TryGetValue(eventName, out var handlerTypes))
+        {
+            _logger.LogWarning("No handlers for event {EventName}", eventName);
+            return;
+        }
+        
+        using var scope = _serviceProvider.CreateScope();
+        
+        foreach (var handlerType in handlerTypes)
+        {
+            try
+            {
+                var handler = scope.ServiceProvider.GetRequiredService(handlerType);
+                var eventType = GetEventTypeByName(eventName);
+                var integrationEvent = JsonSerializer.Deserialize(message, eventType);
+                
+                var concreteType = typeof(IIntegrationEventHandler<>).MakeGenericType(eventType);
+                await (Task)concreteType.GetMethod("Handle")!.Invoke(handler, new[] { integrationEvent })!;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing event {EventName} with handler {Handler}", 
+                    eventName, handlerType.Name);
+            }
+        }
+    }
+    
+    public async Task UnsubscribeAsync<T, TH>()
+        where T : IntegrationEvent
+        where TH : IIntegrationEventHandler<T>
+    {
+        var eventName = typeof(T).Name;
+        
+        await _semaphore.WaitAsync();
+        try
+        {
+            if (_handlers.TryGetValue(eventName, out var handlerTypes))
+            {
+                handlerTypes.Remove(typeof(TH));
+                
+                if (!handlerTypes.Any())
+                {
+                    _handlers.Remove(eventName);
+                    await _subscriber.UnsubscribeAsync(eventName);
+                }
+            }
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+    
+    public void Dispose()
+    {
+        _semaphore?.Dispose();
+    }
+}
+```
+
+#### 3. Using EventBus
+```csharp
+// Define events
+public class PuzzleCompletedEvent : IntegrationEvent
+{
+    public Guid PuzzleId { get; set; }
+    public Guid SessionId { get; set; }
+    public int CompletionTimeSeconds { get; set; }
+    public List<Guid> ParticipantIds { get; set; }
+}
+
+// Define handlers
+public class PuzzleCompletedEventHandler : IIntegrationEventHandler<PuzzleCompletedEvent>
+{
+    private readonly INotificationService _notificationService;
+    private readonly ILogger<PuzzleCompletedEventHandler> _logger;
+    
+    public PuzzleCompletedEventHandler(
+        INotificationService notificationService,
+        ILogger<PuzzleCompletedEventHandler> logger)
+    {
+        _notificationService = notificationService;
+        _logger = logger;
+    }
+    
+    public async Task Handle(PuzzleCompletedEvent @event)
+    {
+        _logger.LogInformation("Handling puzzle completed event for puzzle {PuzzleId}", 
+            @event.PuzzleId);
+        
+        foreach (var participantId in @event.ParticipantIds)
+        {
+            await _notificationService.NotifyUserAsync(participantId, 
+                $"Puzzle completed in {@event.CompletionTimeSeconds} seconds!");
+        }
+    }
+}
+
+// Register and use
+builder.Services.AddScoped<PuzzleCompletedEventHandler>();
+
+// In application startup
+var eventBus = app.Services.GetRequiredService<IEventBus>();
+await eventBus.SubscribeAsync<PuzzleCompletedEvent, PuzzleCompletedEventHandler>();
+
+// Publishing events
+public class PuzzleService
+{
+    private readonly IEventBus _eventBus;
+    
+    public async Task CompletePuzzleAsync(Guid sessionId)
+    {
+        // ... complete puzzle logic ...
+        
+        var @event = new PuzzleCompletedEvent
+        {
+            PuzzleId = puzzle.Id,
+            SessionId = sessionId,
+            CompletionTimeSeconds = (int)duration.TotalSeconds,
+            ParticipantIds = participants.Select(p => p.UserId).ToList()
+        };
+        
+        await _eventBus.PublishAsync(@event);
+    }
+}
+```
+
+### Connection Patterns and Best Practices
+
+#### 1. Resilience Pattern
+```csharp
+public class ResilientRedisService
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly ILogger<ResilientRedisService> _logger;
+    
+    public async Task<T?> GetAsync<T>(string key) where T : class
+    {
+        try
+        {
+            if (!_redis.IsConnected)
+            {
+                _logger.LogWarning("Redis is not connected");
+                return null; // Graceful degradation
+            }
+            
+            var db = _redis.GetDatabase();
+            var value = await db.StringGetAsync(key);
+            
+            if (value.IsNullOrEmpty)
+                return null;
+                
+            return JsonSerializer.Deserialize<T>(value!);
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogError(ex, "Redis connection error");
+            return null; // Fail gracefully
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogError(ex, "Redis timeout");
+            return null;
+        }
+    }
+}
+```
+
+#### 2. Circuit Breaker Pattern
+```csharp
+public class RedisCircuitBreaker
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly IAsyncPolicy<IDatabase> _circuitBreaker;
+    
+    public RedisCircuitBreaker(IConnectionMultiplexer redis)
+    {
+        _redis = redis;
+        
+        _circuitBreaker = Policy<IDatabase>
+            .Handle<RedisConnectionException>()
+            .Or<TimeoutException>()
+            .CircuitBreakerAsync(
+                handledEventsAllowedBeforeBreaking: 3,
+                durationOfBreak: TimeSpan.FromSeconds(30),
+                onBreak: (result, duration) =>
+                {
+                    // Log circuit open
+                },
+                onReset: () =>
+                {
+                    // Log circuit closed
+                });
+    }
+    
+    public async Task<IDatabase> GetDatabaseAsync()
+    {
+        return await _circuitBreaker.ExecuteAsync(async () =>
+        {
+            if (!_redis.IsConnected)
+                throw new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Not connected");
+                
+            return _redis.GetDatabase();
+        });
+    }
+}
+```
+
+### Best Practices
+
+```yaml
+IConnectionMultiplexer Best Practices:
+  1. Singleton Pattern:
+     - Create once, reuse everywhere
+     - Thread-safe by design
+     - Expensive to create
+     
+  2. Configuration:
+     - Set AbortOnConnectFail = false
+     - Configure appropriate timeouts
+     - Use connection pooling
+     - Enable keep-alive
+     
+  3. Error Handling:
+     - Handle connection events
+     - Implement circuit breakers
+     - Graceful degradation
+     - Retry policies
+     
+  4. Performance:
+     - Use pipelining
+     - Batch operations
+     - Async everywhere
+     - Monitor latency
+
+EventBus with Redis:
+  1. Design:
+     - Keep events immutable
+     - Version your events
+     - Use correlation IDs
+     - Implement idempotency
+     
+  2. Reliability:
+     - Handle failures gracefully
+     - Implement retry logic
+     - Use dead letter queues
+     - Monitor event flow
+     
+  3. Performance:
+     - Use appropriate serialization
+     - Consider event size
+     - Implement backpressure
+     - Monitor throughput
+```
+
+`IConnectionMultiplexer` is Redis-specific and provides the foundation for all Redis operations in .NET applications. The EventBus pattern commonly uses Redis as a lightweight message broker through IConnectionMultiplexer's pub/sub functionality, enabling distributed event-driven architectures without the complexity of dedicated message brokers like RabbitMQ or Azure Service Bus.
