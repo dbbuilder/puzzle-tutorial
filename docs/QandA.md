@@ -21186,4 +21186,1680 @@ Monitoring Architecture:
      - Dependency mapping
 ```
 
-**Key Insight**: Health checks integrate with monitoring platforms through structured metrics, telemetry publishers, and standardized formats. Prometheus uses a pull model with exposed metrics endpoints, while Application Insights uses a push model with telemetry clients. Both enable comprehensive monitoring, alerting, and visualization of system health through careful instrumentation and consistent data modeling.
+## Q37: What is TTL in Redis? Similar to TTL in DNS?
+
+### Answer:
+
+TTL (Time To Live) in Redis is conceptually similar to DNS TTL but serves a different purpose. Both involve automatic expiration of data after a specified time period.
+
+### Redis TTL
+
+Redis TTL is a mechanism for automatically expiring keys after a specified duration, helping manage memory and ensure data freshness.
+
+#### Setting TTL in Redis
+
+```csharp
+// Using StackExchange.Redis
+public class RedisService
+{
+    private readonly IConnectionMultiplexer _redis;
+    
+    public async Task SetWithExpiry(string key, string value, TimeSpan expiry)
+    {
+        var db = _redis.GetDatabase();
+        
+        // Set key with expiration
+        await db.StringSetAsync(key, value, expiry);
+        
+        // Or set TTL separately
+        await db.StringSetAsync(key, value);
+        await db.KeyExpireAsync(key, expiry);
+    }
+    
+    public async Task<TimeSpan?> GetTimeToLive(string key)
+    {
+        var db = _redis.GetDatabase();
+        return await db.KeyTimeToLiveAsync(key);
+    }
+}
+```
+
+#### Common TTL Patterns
+
+```csharp
+public class CachePatterns
+{
+    private readonly IDatabase _db;
+    
+    // Session management - 30 minute TTL
+    public async Task StoreSession(string sessionId, SessionData data)
+    {
+        var key = $"session:{sessionId}";
+        var json = JsonSerializer.Serialize(data);
+        await _db.StringSetAsync(key, json, TimeSpan.FromMinutes(30));
+    }
+    
+    // Rate limiting - 1 minute sliding window
+    public async Task<bool> CheckRateLimit(string userId, int limit)
+    {
+        var key = $"ratelimit:{userId}:{DateTime.UtcNow:yyyyMMddHHmm}";
+        var count = await _db.StringIncrementAsync(key);
+        
+        if (count == 1)
+        {
+            await _db.KeyExpireAsync(key, TimeSpan.FromMinutes(1));
+        }
+        
+        return count <= limit;
+    }
+    
+    // Temporary locks - 5 second TTL
+    public async Task<bool> AcquireLock(string resource)
+    {
+        var key = $"lock:{resource}";
+        var lockId = Guid.NewGuid().ToString();
+        
+        return await _db.StringSetAsync(key, lockId, 
+            TimeSpan.FromSeconds(5), When.NotExists);
+    }
+}
+```
+
+### DNS TTL vs Redis TTL Comparison
+
+```yaml
+Similarities:
+  - Both define lifetime of data
+  - Both use seconds as unit
+  - Both enable automatic cleanup
+  - Both improve performance
+
+Differences:
+  Redis TTL:
+    - Controls cache expiration
+    - Manages memory usage
+    - Key-level granularity
+    - Can be modified after setting
+    - Precision to milliseconds
+    
+  DNS TTL:
+    - Controls DNS cache duration
+    - Reduces DNS query load
+    - Record-level granularity
+    - Fixed until record update
+    - Typically in seconds/hours
+```
+
+### Redis TTL Commands
+
+```bash
+# Set TTL
+EXPIRE key 300              # 300 seconds
+PEXPIRE key 300000         # 300000 milliseconds
+EXPIREAT key 1735689600    # Unix timestamp
+PEXPIREAT key 1735689600000 # Unix timestamp in milliseconds
+
+# Get remaining TTL
+TTL key    # Returns seconds (-1 if no TTL, -2 if key doesn't exist)
+PTTL key   # Returns milliseconds
+
+# Remove TTL
+PERSIST key  # Make key persistent
+
+# Set value with TTL
+SETEX key 300 "value"      # SET with EXpire
+SET key "value" EX 300     # Alternative syntax
+SET key "value" PX 300000  # Millisecond precision
+```
+
+### TTL Implementation Details
+
+```csharp
+public class RedisCache : IDistributedCache
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly ILogger<RedisCache> _logger;
+    
+    public async Task<T?> GetAsync<T>(string key, Func<Task<T>> factory, 
+        TimeSpan? expiry = null) where T : class
+    {
+        var db = _redis.GetDatabase();
+        
+        // Try to get from cache
+        var cached = await db.StringGetAsync(key);
+        if (cached.HasValue)
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<T>(cached!);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to deserialize cached value");
+                await db.KeyDeleteAsync(key);
+            }
+        }
+        
+        // Generate new value
+        var value = await factory();
+        if (value != null)
+        {
+            var json = JsonSerializer.Serialize(value);
+            var ttl = expiry ?? TimeSpan.FromMinutes(5);
+            
+            await db.StringSetAsync(key, json, ttl);
+        }
+        
+        return value;
+    }
+    
+    public async Task RefreshAsync(string key)
+    {
+        var db = _redis.GetDatabase();
+        var ttl = await db.KeyTimeToLiveAsync(key);
+        
+        if (ttl.HasValue && ttl.Value.TotalSeconds > 0)
+        {
+            // Reset TTL to original value
+            await db.KeyExpireAsync(key, ttl.Value);
+        }
+    }
+}
+```
+
+### TTL Strategies
+
+#### 1. Fixed TTL Strategy
+```csharp
+public class FixedTTLStrategy
+{
+    private readonly Dictionary<string, TimeSpan> _ttlMap = new()
+    {
+        ["user:profile"] = TimeSpan.FromHours(1),
+        ["product:details"] = TimeSpan.FromMinutes(30),
+        ["search:results"] = TimeSpan.FromMinutes(5),
+        ["api:response"] = TimeSpan.FromSeconds(60)
+    };
+    
+    public TimeSpan GetTTL(string keyPattern)
+    {
+        return _ttlMap.TryGetValue(keyPattern, out var ttl) 
+            ? ttl 
+            : TimeSpan.FromMinutes(10); // Default
+    }
+}
+```
+
+#### 2. Sliding Window TTL
+```csharp
+public class SlidingWindowCache
+{
+    private readonly IDatabase _db;
+    
+    public async Task<T?> GetWithSlidingExpiration<T>(string key, 
+        TimeSpan window) where T : class
+    {
+        var value = await _db.StringGetAsync(key);
+        
+        if (value.HasValue)
+        {
+            // Extend TTL on access
+            await _db.KeyExpireAsync(key, window);
+            return JsonSerializer.Deserialize<T>(value!);
+        }
+        
+        return null;
+    }
+}
+```
+
+#### 3. Adaptive TTL
+```csharp
+public class AdaptiveTTLStrategy
+{
+    private readonly IDatabase _db;
+    
+    public async Task SetWithAdaptiveTTL(string key, string value)
+    {
+        // Analyze access patterns
+        var accessCount = await _db.StringIncrementAsync($"{key}:access");
+        var ttl = CalculateTTL(accessCount);
+        
+        await _db.StringSetAsync(key, value, ttl);
+    }
+    
+    private TimeSpan CalculateTTL(long accessCount)
+    {
+        // Higher access = longer TTL
+        return accessCount switch
+        {
+            < 10 => TimeSpan.FromMinutes(5),
+            < 50 => TimeSpan.FromMinutes(15),
+            < 100 => TimeSpan.FromHours(1),
+            _ => TimeSpan.FromHours(6)
+        };
+    }
+}
+```
+
+### TTL Best Practices
+
+```yaml
+Best Practices:
+  1. Choose Appropriate TTLs:
+     - Session data: 15-30 minutes
+     - User profiles: 1-24 hours
+     - Static content: 1-7 days
+     - Rate limits: 1-60 seconds
+     - Locks: 5-30 seconds
+  
+  2. Memory Management:
+     - Monitor memory usage
+     - Set maxmemory-policy
+     - Use shorter TTLs under pressure
+     - Implement TTL randomization
+  
+  3. TTL Patterns:
+     - Use SETEX for atomic operations
+     - Implement TTL refresh on access
+     - Add jitter to prevent thundering herd
+     - Monitor TTL effectiveness
+  
+  4. Eviction Policies:
+     volatile-lru: Evict keys with TTL using LRU
+     volatile-ttl: Evict keys with shortest TTL
+     volatile-random: Random eviction with TTL
+     allkeys-lru: LRU on all keys
+```
+
+### Monitoring TTL Effectiveness
+
+```csharp
+public class TTLMonitoring
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly IMetrics _metrics;
+    
+    public async Task MonitorTTLs()
+    {
+        var server = _redis.GetServer(_redis.GetEndPoints().First());
+        var db = _redis.GetDatabase();
+        
+        await foreach (var key in server.KeysAsync(pattern: "*"))
+        {
+            var ttl = await db.KeyTimeToLiveAsync(key);
+            
+            if (ttl.HasValue)
+            {
+                _metrics.Histogram("redis.ttl.remaining", ttl.Value.TotalSeconds,
+                    new[] { "key_type", GetKeyType(key) });
+            }
+        }
+    }
+    
+    private string GetKeyType(string key)
+    {
+        var parts = key.Split(':');
+        return parts.Length > 0 ? parts[0] : "unknown";
+    }
+}
+```
+
+### Advanced TTL Use Cases
+
+```csharp
+// 1. Distributed session with refresh
+public class DistributedSession
+{
+    public async Task<bool> ExtendSession(string sessionId)
+    {
+        var key = $"session:{sessionId}";
+        var ttl = await _db.KeyTimeToLiveAsync(key);
+        
+        if (ttl?.TotalMinutes > 5)
+        {
+            // Extend by 30 minutes from now
+            await _db.KeyExpireAsync(key, TimeSpan.FromMinutes(30));
+            return true;
+        }
+        
+        return false; // Session about to expire
+    }
+}
+
+// 2. Cache warming with TTL
+public class CacheWarmer
+{
+    public async Task WarmCache()
+    {
+        var tasks = new List<Task>();
+        
+        foreach (var item in await GetPopularItems())
+        {
+            tasks.Add(Task.Run(async () =>
+            {
+                var data = await FetchItemData(item.Id);
+                var ttl = TimeSpan.FromHours(1);
+                
+                // Add random jitter (±10%)
+                var jitter = Random.Shared.Next(-360, 360);
+                ttl = ttl.Add(TimeSpan.FromSeconds(jitter));
+                
+                await _db.StringSetAsync($"item:{item.Id}", 
+                    JsonSerializer.Serialize(data), ttl);
+            }));
+        }
+        
+        await Task.WhenAll(tasks);
+    }
+}
+
+// 3. TTL-based cleanup
+public class TTLCleanup
+{
+    public async Task CleanupExpiredData()
+    {
+        // Redis handles this automatically, but we can track it
+        _redis.ConnectionFailed += (sender, args) =>
+        {
+            _logger.LogWarning("Redis connection failed: {FailureType}", 
+                args.FailureType);
+        };
+        
+        _redis.ConnectionRestored += async (sender, args) =>
+        {
+            _logger.LogInformation("Redis connection restored");
+            // Re-populate critical data with TTL
+            await RepopulateCriticalCache();
+        };
+    }
+}
+```
+
+The key difference is that Redis TTL is about data lifecycle management in a cache/database, while DNS TTL is about distributed caching of network name resolutions. Both are critical for system performance and reliability.
+
+## Q38: Should we use Porter vs Terraform? Which is better when? If we use Terraform across the board what do we miss out on?
+
+### Answer:
+
+Porter and Terraform serve different purposes in the infrastructure and application deployment ecosystem. Porter is a Cloud Native Application Bundle (CNAB) tool focusing on packaging and distributing applications, while Terraform is an Infrastructure as Code (IaC) tool for provisioning and managing cloud resources.
+
+### Understanding Porter
+
+Porter is designed to create portable application bundles that include everything needed to install an application across different environments.
+
+#### Porter Bundle Example
+
+```yaml
+# porter.yaml
+name: collaborative-puzzle
+version: 0.1.0
+description: "Collaborative Puzzle Platform Bundle"
+
+credentials:
+  - name: azure-subscription-id
+    env: AZURE_SUBSCRIPTION_ID
+  - name: kubeconfig
+    path: /home/nonroot/.kube/config
+
+parameters:
+  - name: environment
+    type: string
+    default: dev
+    enum: ["dev", "staging", "production"]
+  - name: redis-size
+    type: string
+    default: "C1"
+  - name: database-sku
+    type: string
+    default: "S0"
+
+mixins:
+  - exec
+  - kubernetes
+  - helm3
+  - terraform
+  - az
+
+install:
+  - terraform:
+      description: "Provision Azure Infrastructure"
+      autoApprove: true
+      workingDir: ./terraform
+      vars:
+        environment: ${ bundle.parameters.environment }
+        redis_sku: ${ bundle.parameters.redis-size }
+        
+  - helm3:
+      description: "Install Application"
+      name: puzzle-app
+      chart: ./charts/puzzle-platform
+      namespace: ${ bundle.parameters.environment }
+      values:
+        - ./values/${ bundle.parameters.environment }.yaml
+      wait: true
+
+upgrade:
+  - terraform:
+      description: "Update Infrastructure"
+      autoApprove: false
+      workingDir: ./terraform
+      
+  - helm3:
+      description: "Upgrade Application"
+      name: puzzle-app
+      chart: ./charts/puzzle-platform
+      namespace: ${ bundle.parameters.environment }
+
+uninstall:
+  - helm3:
+      description: "Remove Application"
+      purge: true
+      releases:
+        - puzzle-app
+        
+  - terraform:
+      description: "Destroy Infrastructure"
+      workingDir: ./terraform
+```
+
+### Understanding Terraform
+
+Terraform focuses on declarative infrastructure provisioning across multiple cloud providers.
+
+#### Terraform Configuration Example
+
+```hcl
+# main.tf
+terraform {
+  required_version = ">= 1.5.0"
+  
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.23"
+    }
+  }
+  
+  backend "azurerm" {
+    resource_group_name  = "terraform-state-rg"
+    storage_account_name = "tfstatepuzzle"
+    container_name       = "tfstate"
+    key                  = "puzzle.tfstate"
+  }
+}
+
+# Resource Group
+resource "azurerm_resource_group" "main" {
+  name     = "puzzle-${var.environment}-rg"
+  location = var.location
+  
+  tags = local.common_tags
+}
+
+# AKS Cluster
+resource "azurerm_kubernetes_cluster" "main" {
+  name                = "puzzle-${var.environment}-aks"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_prefix          = "puzzle-${var.environment}"
+  
+  default_node_pool {
+    name       = "default"
+    node_count = var.node_count
+    vm_size    = var.node_size
+  }
+  
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+# Redis Cache
+resource "azurerm_redis_cache" "main" {
+  name                = "puzzle-${var.environment}-redis"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  capacity            = var.redis_capacity
+  family              = var.redis_family
+  sku_name            = var.redis_sku
+  
+  redis_configuration {
+    enable_authentication = true
+    maxmemory_policy     = "allkeys-lru"
+  }
+}
+```
+
+### Porter vs Terraform Comparison
+
+```yaml
+Porter Strengths:
+  - Application-centric bundles
+  - Multi-tool orchestration (Terraform + Helm + Scripts)
+  - Portable across environments
+  - Built-in credential management
+  - Versioned application packages
+  - Runtime parameter injection
+  - Custom action support
+
+Terraform Strengths:
+  - Infrastructure-centric
+  - Massive provider ecosystem
+  - State management
+  - Plan/Apply workflow
+  - Resource dependencies
+  - Import existing resources
+  - Mature tooling ecosystem
+
+When to Use Porter:
+  - Distributing applications to customers
+  - Complex multi-tool deployments
+  - Need portable bundles
+  - Mixed infrastructure + app deployment
+  - Air-gapped environments
+  - Marketplace scenarios
+
+When to Use Terraform:
+  - Pure infrastructure provisioning
+  - Multi-cloud deployments
+  - GitOps workflows
+  - Team collaboration on infrastructure
+  - Existing Terraform modules
+  - Infrastructure lifecycle management
+```
+
+### What You Miss Using Only Terraform
+
+#### 1. Application Bundle Portability
+```yaml
+# Porter provides
+bundles:
+  - Self-contained packages
+  - Offline installation support
+  - Signed bundles for security
+  - Registry distribution
+  - Version management
+
+# Terraform alternative requires
+terraform_only:
+  - External package management
+  - Custom distribution methods
+  - Separate signing process
+  - Manual version tracking
+```
+
+#### 2. Multi-Tool Orchestration
+```bash
+# Porter handles multiple tools seamlessly
+install:
+  - terraform:
+      description: "Create infrastructure"
+  - exec:
+      description: "Run migrations"
+      command: ./scripts/migrate.sh
+  - helm3:
+      description: "Deploy application"
+  - az:
+      description: "Configure DNS"
+
+# Terraform requires external orchestration
+# deploy.sh
+terraform apply -auto-approve
+./scripts/migrate.sh
+helm install myapp ./chart
+az network dns record-set a add-record ...
+```
+
+#### 3. Runtime Parameter Management
+```yaml
+# Porter parameter injection
+parameters:
+  - name: database_password
+    type: string
+    sensitive: true
+    source:
+      env: DB_PASSWORD
+
+# Terraform requires wrapper scripts
+#!/bin/bash
+export TF_VAR_database_password=$DB_PASSWORD
+terraform apply
+```
+
+### Hybrid Approach: Using Both
+
+```yaml
+# porter.yaml using Terraform mixin
+name: enterprise-app
+version: 1.0.0
+
+mixins:
+  - terraform
+  - kubernetes
+  - exec
+
+install:
+  # Step 1: Provision infrastructure with Terraform
+  - terraform:
+      description: "Provision cloud resources"
+      workingDir: ./terraform
+      outputs:
+        - name: cluster_endpoint
+        - name: redis_connection_string
+        
+  # Step 2: Configure Kubernetes
+  - kubernetes:
+      description: "Create namespaces"
+      manifests:
+        - ./k8s/namespaces.yaml
+        
+  # Step 3: Install application
+  - exec:
+      description: "Deploy application"
+      command: kubectl
+      arguments:
+        - apply
+        - -f
+        - ./k8s/app.yaml
+```
+
+### Decision Matrix
+
+```yaml
+Choose Porter When:
+  Requirements:
+    - Distributing to external customers
+    - Need offline/air-gapped deployment
+    - Complex multi-step installations
+    - Mixed tooling requirements
+    - Application marketplace scenarios
+    
+  Examples:
+    - ISV software distribution
+    - Enterprise application packages
+    - Multi-cloud portable apps
+    - Demo/trial environments
+
+Choose Terraform When:
+  Requirements:
+    - Infrastructure-only deployments
+    - GitOps/IaC workflows
+    - Team infrastructure management
+    - Existing Terraform modules
+    - State-based management needed
+    
+  Examples:
+    - Cloud infrastructure provisioning
+    - Network configuration
+    - Security policies
+    - Platform engineering
+
+Choose Both When:
+  Requirements:
+    - Complex enterprise deployments
+    - Need infrastructure + application
+    - Require distribution capabilities
+    - Want best of both tools
+    
+  Examples:
+    - Enterprise software products
+    - Multi-tenant SaaS platforms
+    - Regulated environments
+```
+
+### Example: Terraform-Only Limitations
+
+```hcl
+# What Terraform handles well
+resource "azurerm_postgresql_server" "main" {
+  name                = "puzzle-db"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  
+  sku_name = "GP_Gen5_2"
+  version  = "11"
+}
+
+# What requires external tooling
+# - Database migrations
+# - Application deployment
+# - Configuration management
+# - Secret rotation
+# - Health checks
+
+# Typically solved with:
+# - Separate CI/CD pipelines
+# - Configuration management tools
+# - Custom scripts
+# - Additional operators
+```
+
+### Porter Bundle for Terraform Users
+
+```dockerfile
+# Dockerfile.tmpl
+FROM debian:stretch-slim
+
+ARG BUNDLE_DIR
+
+# Install Terraform
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    software-properties-common
+    
+RUN curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
+RUN apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+RUN apt-get update && apt-get install -y terraform
+
+# Porter will inject bundle contents
+COPY . $BUNDLE_DIR
+RUN cd $BUNDLE_DIR && terraform init
+```
+
+### Migration Strategy
+
+```yaml
+From Terraform to Porter:
+  1. Wrap existing Terraform:
+     - Use terraform mixin
+     - Keep existing .tf files
+     - Add porter.yaml wrapper
+     
+  2. Add application deployment:
+     - Include Helm charts
+     - Add configuration steps
+     - Bundle dependencies
+     
+  3. Create distribution:
+     - Build CNAB bundle
+     - Push to registry
+     - Share with users
+
+From Porter to Terraform:
+  1. Extract infrastructure:
+     - Convert to .tf files
+     - Setup state backend
+     - Create modules
+     
+  2. Handle applications:
+     - Separate deployment pipeline
+     - Use Helm/Kustomize
+     - Create runbooks
+     
+  3. Orchestration:
+     - CI/CD pipelines
+     - GitOps workflows
+     - External automation
+```
+
+### Best Practices
+
+```yaml
+Porter Best Practices:
+  - Version bundles semantically
+  - Sign bundles for security
+  - Test bundles in CI/CD
+  - Document parameters clearly
+  - Use mixins appropriately
+  - Handle errors gracefully
+
+Terraform Best Practices:
+  - Use remote state
+  - Implement state locking
+  - Modularize configurations
+  - Pin provider versions
+  - Use workspaces for environments
+  - Implement proper tagging
+
+Combined Approach:
+  - Terraform for infrastructure
+  - Porter for distribution
+  - Clear separation of concerns
+  - Consistent naming conventions
+  - Unified credential management
+  - Comprehensive documentation
+```
+
+The choice between Porter and Terraform isn't binary—they solve different problems. Terraform excels at infrastructure provisioning with state management, while Porter excels at application packaging and distribution. For pure infrastructure needs, Terraform is sufficient. For distributed applications requiring multiple tools and portability, Porter adds significant value. Many organizations benefit from using both tools together, leveraging their respective strengths.
+
+## Q39: Explain how to setup Grafana on Prometheus data? Azure Monitor on Application Insights? Kibana for either or both or custom logs?
+
+### Answer:
+
+Setting up observability platforms requires understanding data sources, query languages, and visualization capabilities. Here's how to configure Grafana with Prometheus, Azure Monitor with Application Insights, and Kibana with various data sources.
+
+### Grafana with Prometheus
+
+#### 1. Deploy Prometheus and Grafana
+
+```yaml
+# docker-compose-monitoring.yml
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  monitoring:
+```
+
+#### 2. Configure Prometheus
+
+```yaml
+# prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Application metrics
+  - job_name: 'puzzle-app'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['puzzle-api:5000']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(?::\d+)?'
+        replacement: '${1}'
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Redis exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+```
+
+#### 3. Provision Grafana Data Sources
+
+```yaml
+# grafana/provisioning/datasources/prometheus.yml
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      queryTimeout: 60s
+      httpMethod: POST
+    editable: true
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+```
+
+#### 4. Create Grafana Dashboards
+
+```json
+// grafana/provisioning/dashboards/puzzle-app.json
+{
+  "dashboard": {
+    "title": "Puzzle Application Metrics",
+    "uid": "puzzle-metrics",
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (method, status)",
+            "legendFormat": "{{method}} - {{status}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "title": "Response Time (p95)",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+            "legendFormat": "{{endpoint}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "title": "Active Puzzle Sessions",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "puzzle_active_sessions",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "title": "Redis Memory Usage",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes / (1024 * 1024)",
+            "legendFormat": "Memory (MB)",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### 5. Application Metrics Implementation
+
+```csharp
+// Program.cs - Add Prometheus metrics
+using Prometheus;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Configure Prometheus metrics
+builder.Services.AddSingleton<IMetricFactory>(Metrics.DefaultFactory);
+
+var app = builder.Build();
+
+// Enable metrics endpoint
+app.UseHttpMetrics(options =>
+{
+    options.AddCustomLabel("service", context => "puzzle-api");
+    options.ReduceStatusCodeCardinality();
+});
+
+app.MapMetrics(); // Exposes /metrics endpoint
+
+// Custom metrics
+public class PuzzleMetrics
+{
+    private readonly Counter _sessionsCreated;
+    private readonly Gauge _activeSessions;
+    private readonly Histogram _pieceMoveDuration;
+    private readonly Summary _puzzleCompletionTime;
+
+    public PuzzleMetrics()
+    {
+        _sessionsCreated = Metrics.CreateCounter(
+            "puzzle_sessions_created_total",
+            "Total number of puzzle sessions created",
+            new CounterConfiguration
+            {
+                LabelNames = new[] { "puzzle_type", "difficulty" }
+            });
+
+        _activeSessions = Metrics.CreateGauge(
+            "puzzle_active_sessions",
+            "Number of currently active puzzle sessions");
+
+        _pieceMoveDuration = Metrics.CreateHistogram(
+            "puzzle_piece_move_duration_seconds",
+            "Time taken to process piece moves",
+            new HistogramConfiguration
+            {
+                LabelNames = new[] { "puzzle_id" },
+                Buckets = Histogram.ExponentialBuckets(0.001, 2, 10)
+            });
+
+        _puzzleCompletionTime = Metrics.CreateSummary(
+            "puzzle_completion_seconds",
+            "Time taken to complete puzzles",
+            new SummaryConfiguration
+            {
+                LabelNames = new[] { "difficulty" },
+                Objectives = new[]
+                {
+                    new QuantileEpsilonPair(0.5, 0.05),
+                    new QuantileEpsilonPair(0.9, 0.05),
+                    new QuantileEpsilonPair(0.99, 0.01)
+                }
+            });
+    }
+
+    public void RecordSessionCreated(string puzzleType, string difficulty)
+    {
+        _sessionsCreated.WithLabels(puzzleType, difficulty).Inc();
+        _activeSessions.Inc();
+    }
+
+    public void RecordSessionEnded()
+    {
+        _activeSessions.Dec();
+    }
+
+    public IDisposable TrackPieceMove(string puzzleId)
+    {
+        return _pieceMoveDuration.WithLabels(puzzleId).NewTimer();
+    }
+
+    public void RecordPuzzleCompleted(string difficulty, double seconds)
+    {
+        _puzzleCompletionTime.WithLabels(difficulty).Observe(seconds);
+    }
+}
+```
+
+### Azure Monitor with Application Insights
+
+#### 1. Configure Application Insights
+
+```csharp
+// Program.cs
+builder.Services.AddApplicationInsightsTelemetry(options =>
+{
+    options.ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+    options.EnableAdaptiveSampling = true;
+    options.EnableDependencyTrackingTelemetryModule = true;
+    options.EnablePerformanceCounterCollectionModule = true;
+});
+
+// Custom telemetry
+builder.Services.AddSingleton<ITelemetryInitializer, CustomTelemetryInitializer>();
+builder.Services.Configure<TelemetryConfiguration>(config =>
+{
+    config.TelemetryProcessorChainBuilder
+        .Use(next => new CustomTelemetryProcessor(next))
+        .Build();
+});
+
+public class CustomTelemetryInitializer : ITelemetryInitializer
+{
+    public void Initialize(ITelemetry telemetry)
+    {
+        telemetry.Context.GlobalProperties["Environment"] = 
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown";
+        
+        if (telemetry is RequestTelemetry request)
+        {
+            // Add custom properties
+            if (HttpContext.Current?.User?.Identity?.IsAuthenticated == true)
+            {
+                request.Properties["UserId"] = HttpContext.Current.User.Identity.Name;
+            }
+        }
+    }
+}
+```
+
+#### 2. Track Custom Events and Metrics
+
+```csharp
+public class PuzzleService
+{
+    private readonly TelemetryClient _telemetryClient;
+    
+    public async Task<PuzzleSession> CreateSession(CreateSessionRequest request)
+    {
+        using var operation = _telemetryClient.StartOperation<RequestTelemetry>("CreatePuzzleSession");
+        
+        try
+        {
+            var session = await _repository.CreateSessionAsync(request);
+            
+            // Track custom event
+            _telemetryClient.TrackEvent("PuzzleSessionCreated", new Dictionary<string, string>
+            {
+                ["PuzzleId"] = request.PuzzleId.ToString(),
+                ["Difficulty"] = request.Difficulty,
+                ["MaxParticipants"] = request.MaxParticipants.ToString()
+            }, new Dictionary<string, double>
+            {
+                ["SessionDuration"] = 0
+            });
+            
+            // Track custom metric
+            _telemetryClient.TrackMetric("ActivePuzzleSessions", 
+                await _repository.GetActiveSessionCountAsync());
+            
+            operation.Telemetry.Success = true;
+            return session;
+        }
+        catch (Exception ex)
+        {
+            _telemetryClient.TrackException(ex, new Dictionary<string, string>
+            {
+                ["Operation"] = "CreatePuzzleSession",
+                ["PuzzleId"] = request.PuzzleId.ToString()
+            });
+            
+            operation.Telemetry.Success = false;
+            throw;
+        }
+    }
+    
+    // Track dependencies
+    public async Task<bool> CheckRedisConnection()
+    {
+        using var dependency = _telemetryClient.StartOperation<DependencyTelemetry>("Redis:Ping");
+        dependency.Telemetry.Type = "Redis";
+        dependency.Telemetry.Target = "puzzle-redis.redis.cache.windows.net";
+        
+        try
+        {
+            var result = await _redis.PingAsync();
+            dependency.Telemetry.Success = true;
+            dependency.Telemetry.ResultCode = "200";
+            return result;
+        }
+        catch (Exception ex)
+        {
+            dependency.Telemetry.Success = false;
+            dependency.Telemetry.ResultCode = "500";
+            throw;
+        }
+    }
+}
+```
+
+#### 3. Azure Monitor Queries
+
+```kql
+// Application Insights Analytics Queries
+
+// Request performance analysis
+requests
+| where timestamp > ago(1h)
+| summarize 
+    RequestCount = count(),
+    AvgDuration = avg(duration),
+    P95Duration = percentile(duration, 95),
+    P99Duration = percentile(duration, 99)
+    by bin(timestamp, 5m), name
+| render timechart
+
+// Custom event analysis
+customEvents
+| where timestamp > ago(24h)
+| where name == "PuzzleSessionCreated"
+| extend Difficulty = tostring(customDimensions.Difficulty)
+| summarize SessionCount = count() by Difficulty, bin(timestamp, 1h)
+| render columnchart
+
+// Exception tracking
+exceptions
+| where timestamp > ago(1d)
+| summarize ExceptionCount = count() by type, method
+| order by ExceptionCount desc
+| take 10
+
+// Dependency performance
+dependencies
+| where timestamp > ago(1h)
+| where type == "Redis"
+| summarize 
+    AvgDuration = avg(duration),
+    FailureRate = countif(success == false) * 100.0 / count()
+    by name, target
+| order by FailureRate desc
+```
+
+#### 4. Create Azure Dashboard
+
+```json
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| summarize RequestsPerMin = count() by bin(timestamp, 1m)\n| render timechart",
+        "size": 0,
+        "title": "Requests per Minute",
+        "timeContext": {
+          "durationMs": 3600000
+        }
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customMetrics\n| where name == 'ActivePuzzleSessions'\n| project timestamp, value\n| render timechart",
+        "size": 0,
+        "title": "Active Puzzle Sessions"
+      }
+    }
+  ]
+}
+```
+
+### Kibana Setup
+
+#### 1. Deploy ELK Stack
+
+```yaml
+# docker-compose-elk.yml
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: logstash
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+volumes:
+  es_data:
+```
+
+#### 2. Configure Logstash Pipeline
+
+```ruby
+# logstash/pipeline/logstash.conf
+input {
+  # Receive logs from applications
+  tcp {
+    port => 5000
+    codec => json
+  }
+  
+  # Receive metrics from Prometheus (via remote write)
+  http {
+    port => 9091
+    codec => json
+  }
+  
+  # Receive from Filebeat
+  beats {
+    port => 5044
+  }
+}
+
+filter {
+  # Parse application logs
+  if [type] == "application" {
+    json {
+      source => "message"
+    }
+    
+    date {
+      match => [ "timestamp", "ISO8601" ]
+      target => "@timestamp"
+    }
+    
+    mutate {
+      add_field => { "[@metadata][index_name]" => "app-logs-%{+YYYY.MM.dd}" }
+    }
+  }
+  
+  # Parse Prometheus metrics
+  if [type] == "prometheus" {
+    ruby {
+      code => "
+        event.get('[samples]').each do |sample|
+          new_event = LogStash::Event.new(
+            'metric_name' => sample['metric']['__name__'],
+            'value' => sample['value'][1],
+            '@timestamp' => Time.at(sample['value'][0]).utc,
+            'labels' => sample['metric'].reject { |k,v| k == '__name__' }
+          )
+          new_event_block.call(new_event)
+        end
+        event.cancel
+      "
+    }
+    
+    mutate {
+      add_field => { "[@metadata][index_name]" => "metrics-%{+YYYY.MM.dd}" }
+    }
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["elasticsearch:9200"]
+    index => "%{[@metadata][index_name]}"
+  }
+  
+  # Debug output
+  stdout {
+    codec => rubydebug
+  }
+}
+```
+
+#### 3. Configure Application Logging
+
+```csharp
+// Configure Serilog for ELK
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext()
+        .Enrich.WithMachineName()
+        .Enrich.WithEnvironmentName()
+        .Enrich.WithProperty("Application", "PuzzleApi")
+        .WriteTo.Console(new ElasticsearchJsonFormatter())
+        .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri("http://localhost:9200"))
+        {
+            AutoRegisterTemplate = true,
+            IndexFormat = "puzzle-api-{0:yyyy.MM.dd}",
+            NumberOfReplicas = 0,
+            NumberOfShards = 1
+        });
+});
+
+// Structured logging
+public class PuzzleController : ControllerBase
+{
+    private readonly ILogger<PuzzleController> _logger;
+    
+    [HttpPost("sessions")]
+    public async Task<IActionResult> CreateSession(CreateSessionRequest request)
+    {
+        using var scope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["PuzzleId"] = request.PuzzleId,
+            ["UserId"] = User.Identity.Name
+        });
+        
+        _logger.LogInformation("Creating puzzle session {@Request}", request);
+        
+        try
+        {
+            var session = await _service.CreateSessionAsync(request);
+            
+            _logger.LogInformation("Puzzle session created successfully {@Session}", new
+            {
+                session.Id,
+                session.JoinCode,
+                session.CreatedAt
+            });
+            
+            return Ok(session);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create puzzle session");
+            throw;
+        }
+    }
+}
+```
+
+#### 4. Create Kibana Dashboards
+
+```json
+// Kibana Dashboard Configuration
+{
+  "version": "8.11.0",
+  "objects": [
+    {
+      "id": "puzzle-logs-dashboard",
+      "type": "dashboard",
+      "attributes": {
+        "title": "Puzzle Application Logs",
+        "panels": [
+          {
+            "gridData": {
+              "x": 0,
+              "y": 0,
+              "w": 24,
+              "h": 15
+            },
+            "type": "visualization",
+            "id": "log-levels-pie"
+          },
+          {
+            "gridData": {
+              "x": 24,
+              "y": 0,
+              "w": 24,
+              "h": 15
+            },
+            "type": "visualization",
+            "id": "errors-over-time"
+          }
+        ]
+      }
+    },
+    {
+      "id": "log-levels-pie",
+      "type": "visualization",
+      "attributes": {
+        "title": "Log Levels Distribution",
+        "visState": {
+          "type": "pie",
+          "aggs": [
+            {
+              "id": "1",
+              "type": "count",
+              "schema": "metric"
+            },
+            {
+              "id": "2",
+              "type": "terms",
+              "schema": "segment",
+              "params": {
+                "field": "level.keyword",
+                "size": 5
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+### Integrating Multiple Data Sources
+
+#### 1. Grafana with Multiple Sources
+
+```yaml
+# grafana/provisioning/datasources/all-sources.yml
+apiVersion: 1
+
+datasources:
+  # Prometheus for metrics
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+    
+  # Elasticsearch for logs
+  - name: Elasticsearch
+    type: elasticsearch
+    url: http://elasticsearch:9200
+    jsonData:
+      esVersion: "8.11.0"
+      timeField: "@timestamp"
+      
+  # Azure Monitor
+  - name: AzureMonitor
+    type: grafana-azure-monitor-datasource
+    jsonData:
+      cloudName: azuremonitor
+      tenantId: $AZURE_TENANT_ID
+      clientId: $AZURE_CLIENT_ID
+    secureJsonData:
+      clientSecret: $AZURE_CLIENT_SECRET
+```
+
+#### 2. Unified Dashboard
+
+```json
+{
+  "dashboard": {
+    "title": "Unified Observability",
+    "panels": [
+      {
+        "title": "Request Rate (Prometheus)",
+        "datasource": "Prometheus",
+        "targets": [{
+          "expr": "rate(http_requests_total[5m])"
+        }]
+      },
+      {
+        "title": "Application Logs (Elasticsearch)",
+        "datasource": "Elasticsearch",
+        "targets": [{
+          "query": "level:error AND application:PuzzleApi",
+          "timeField": "@timestamp"
+        }]
+      },
+      {
+        "title": "Azure App Insights",
+        "datasource": "AzureMonitor",
+        "targets": [{
+          "queryType": "Application Insights",
+          "query": "requests | summarize count() by bin(timestamp, 5m)"
+        }]
+      }
+    ]
+  }
+}
+```
+
+### Best Practices
+
+```yaml
+Monitoring Best Practices:
+  1. Data Collection:
+     - Use structured logging
+     - Implement distributed tracing
+     - Collect both metrics and logs
+     - Add correlation IDs
+     
+  2. Storage Strategy:
+     - Short-term: High resolution
+     - Medium-term: Aggregated data
+     - Long-term: Key metrics only
+     - Cost optimization
+     
+  3. Dashboard Design:
+     - Start with overview
+     - Drill-down capability
+     - Use consistent time ranges
+     - Include annotations
+     
+  4. Alert Configuration:
+     - Alert on symptoms, not causes
+     - Use multiple conditions
+     - Include runbook links
+     - Implement escalation
+
+Tool Selection:
+  Grafana + Prometheus:
+    - Open source stack
+    - Pull-based metrics
+    - Powerful query language
+    - Cost-effective
+    
+  Azure Monitor:
+    - Native Azure integration
+    - Managed service
+    - AI-powered insights
+    - Enterprise features
+    
+  ELK Stack:
+    - Log aggregation focus
+    - Full-text search
+    - Complex pipelines
+    - Scalable architecture
+```
+
+The key is choosing the right tool for your needs: Grafana+Prometheus for metrics-focused monitoring, Azure Monitor for Azure-native applications, and ELK Stack for log aggregation and analysis. Many organizations use a combination for comprehensive observability.
