@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP/3 Test - Collaborative Puzzle Platform</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.http3 {
+            background-color: #4caf50;
+            color: white;
+        }
+        .status.http2 {
+            background-color: #2196f3;
+            color: white;
+        }
+        .status.http1 {
+            background-color: #ff9800;
+            color: white;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #1976d2;
+        }
+        .results {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .performance-graph {
+            margin-top: 20px;
+        }
+        .bar {
+            height: 30px;
+            background-color: #2196f3;
+            margin: 5px 0;
+            position: relative;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .bar-label {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-weight: bold;
+        }
+        .error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .success {
+            color: #4caf50;
+            font-weight: bold;
+        }
+        .info {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HTTP/3 and QUIC Test Page</h1>
+        <div class="info">
+            <strong>Note:</strong> HTTP/3 support requires:
+            <ul>
+                <li>HTTPS connection (not HTTP)</li>
+                <li>Modern browser with HTTP/3 support (Chrome 79+, Firefox 88+, Edge 79+)</li>
+                <li>Server must advertise HTTP/3 support via Alt-Svc header</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Connection Information</h2>
+        <div class="test-section">
+            <button onclick="getConnectionInfo()">Get Connection Info</button>
+            <div id="connectionInfo" class="results"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Performance Tests</h2>
+        <div class="test-section">
+            <h3>Download Performance Test</h3>
+            <label>Data size (KB): 
+                <select id="dataSize">
+                    <option value="10">10 KB</option>
+                    <option value="100">100 KB</option>
+                    <option value="1024" selected>1 MB</option>
+                    <option value="5120">5 MB</option>
+                    <option value="10240">10 MB</option>
+                </select>
+            </label>
+            <button onclick="runPerformanceTest()">Run Test</button>
+            <div id="performanceResults" class="results"></div>
+            <div id="performanceGraph" class="performance-graph"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Multiplexing Test</h3>
+            <p>Tests HTTP/3's improved multiplexing by making parallel requests</p>
+            <label>Number of parallel requests: 
+                <input type="number" id="parallelRequests" value="10" min="1" max="50">
+            </label>
+            <button onclick="runMultiplexingTest()">Run Multiplexing Test</button>
+            <div id="multiplexingResults" class="results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Upload Test</h3>
+            <input type="file" id="fileInput">
+            <button onclick="runUploadTest()">Upload File</button>
+            <div id="uploadResults" class="results"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Protocol Comparison</h2>
+        <div class="test-section">
+            <button onclick="runProtocolComparison()">Compare HTTP/1.1 vs HTTP/2 vs HTTP/3</button>
+            <div id="comparisonResults" class="results"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/http3';
+
+        function getProtocolBadge(protocol) {
+            if (protocol.includes('3')) return '<span class="status http3">HTTP/3</span>';
+            if (protocol.includes('2')) return '<span class="status http2">HTTP/2</span>';
+            return '<span class="status http1">HTTP/1.1</span>';
+        }
+
+        async function getConnectionInfo() {
+            const resultsDiv = document.getElementById('connectionInfo');
+            resultsDiv.textContent = 'Fetching connection information...';
+
+            try {
+                const response = await fetch(`${API_BASE}/info`);
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+<strong>Connection Information:</strong>
+Protocol: ${data.protocol} ${getProtocolBadge(data.protocol)}
+Is HTTP/3: ${data.isHttp3 ? '<span class="success">Yes</span>' : '<span class="error">No</span>'}
+Is HTTPS: ${data.isHttps ? '<span class="success">Yes</span>' : '<span class="error">No</span>'}
+Connection ID: ${data.connectionId}
+Local Port: ${data.localPort}
+Remote Port: ${data.remotePort}
+
+<strong>HTTP/3 Features:</strong>
+${JSON.stringify(data.features, null, 2)}
+
+<strong>Alt-Svc Headers:</strong>
+${JSON.stringify(data.headers, null, 2)}
+                `;
+            } catch (error) {
+                resultsDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        async function runPerformanceTest() {
+            const resultsDiv = document.getElementById('performanceResults');
+            const graphDiv = document.getElementById('performanceGraph');
+            const size = parseInt(document.getElementById('dataSize').value);
+            
+            resultsDiv.textContent = `Downloading ${size} KB of data...`;
+            graphDiv.innerHTML = '';
+
+            try {
+                const start = performance.now();
+                const response = await fetch(`${API_BASE}/performance-test?size=${size}`);
+                const data = await response.arrayBuffer();
+                const end = performance.now();
+
+                const duration = end - start;
+                const throughput = (data.byteLength / 1024) / (duration / 1000); // KB/s
+                const protocol = response.headers.get('X-Protocol') || 'Unknown';
+                const serverDuration = response.headers.get('X-Duration-Ms') || 'Unknown';
+
+                resultsDiv.innerHTML = `
+<strong>Performance Test Results:</strong>
+Protocol: ${protocol} ${getProtocolBadge(protocol)}
+Data Size: ${data.byteLength / 1024} KB
+Client Duration: ${duration.toFixed(2)} ms
+Server Duration: ${serverDuration} ms
+Network Latency: ${(duration - parseFloat(serverDuration)).toFixed(2)} ms
+Throughput: ${throughput.toFixed(2)} KB/s (${(throughput / 1024).toFixed(2)} MB/s)
+                `;
+
+                // Update graph
+                graphDiv.innerHTML = `
+                    <div class="bar" style="width: ${Math.min(throughput / 10, 100)}%">
+                        <span class="bar-label">${throughput.toFixed(0)} KB/s</span>
+                    </div>
+                `;
+            } catch (error) {
+                resultsDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        async function runMultiplexingTest() {
+            const resultsDiv = document.getElementById('multiplexingResults');
+            const count = parseInt(document.getElementById('parallelRequests').value);
+            
+            resultsDiv.textContent = `Running ${count} parallel requests...`;
+
+            try {
+                const start = performance.now();
+                const promises = [];
+                
+                for (let i = 0; i < count; i++) {
+                    promises.push(
+                        fetch(`${API_BASE}/multiplexing-test/${i}`)
+                            .then(r => r.json())
+                            .then(data => ({ ...data, requestStart: start }))
+                    );
+                }
+
+                const results = await Promise.all(promises);
+                const end = performance.now();
+                const totalDuration = end - start;
+
+                const avgDelay = results.reduce((sum, r) => sum + r.processingTime, 0) / count;
+                const serialTime = results.reduce((sum, r) => sum + r.processingTime, 0);
+                const parallelEfficiency = (serialTime / totalDuration).toFixed(2);
+
+                resultsDiv.innerHTML = `
+<strong>Multiplexing Test Results:</strong>
+Total Requests: ${count}
+Total Duration: ${totalDuration.toFixed(2)} ms
+Average Delay per Request: ${avgDelay.toFixed(2)} ms
+Serial Time (if sequential): ${serialTime} ms
+Parallel Efficiency: ${parallelEfficiency}x speedup
+Effective Parallelism: ${(serialTime / totalDuration).toFixed(1)} concurrent streams
+
+<strong>Individual Request Results:</strong>
+${results.slice(0, 5).map(r => `Stream ${r.streamId}: ${r.processingTime}ms`).join('\n')}
+${count > 5 ? `... and ${count - 5} more requests` : ''}
+                `;
+            } catch (error) {
+                resultsDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        async function runUploadTest() {
+            const resultsDiv = document.getElementById('uploadResults');
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                resultsDiv.innerHTML = '<span class="error">Please select a file first</span>';
+                return;
+            }
+
+            resultsDiv.textContent = `Uploading ${file.name} (${(file.size / 1024).toFixed(2)} KB)...`;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const start = performance.now();
+                const response = await fetch(`${API_BASE}/echo-stream`, {
+                    method: 'POST',
+                    body: file
+                });
+                const data = await response.arrayBuffer();
+                const end = performance.now();
+
+                const duration = end - start;
+                const throughput = (file.size / 1024) / (duration / 1000); // KB/s
+                const protocol = response.headers.get('X-Protocol') || 'Unknown';
+
+                resultsDiv.innerHTML = `
+<strong>Upload Test Results:</strong>
+Protocol: ${protocol} ${getProtocolBadge(protocol)}
+File Name: ${file.name}
+File Size: ${(file.size / 1024).toFixed(2)} KB
+Upload Duration: ${duration.toFixed(2)} ms
+Upload Speed: ${throughput.toFixed(2)} KB/s (${(throughput / 1024).toFixed(2)} MB/s)
+Echo Size: ${(data.byteLength / 1024).toFixed(2)} KB
+Data Integrity: ${data.byteLength === file.size ? '<span class="success">Verified</span>' : '<span class="error">Mismatch</span>'}
+                `;
+            } catch (error) {
+                resultsDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        async function runProtocolComparison() {
+            const resultsDiv = document.getElementById('comparisonResults');
+            resultsDiv.textContent = 'Running protocol comparison tests...';
+
+            const tests = [
+                { name: 'Small Request (1 KB)', size: 1 },
+                { name: 'Medium Request (100 KB)', size: 100 },
+                { name: 'Large Request (1 MB)', size: 1024 }
+            ];
+
+            let results = '<strong>Protocol Comparison Results:</strong>\n\n';
+
+            for (const test of tests) {
+                results += `${test.name}:\n`;
+                
+                try {
+                    const start = performance.now();
+                    const response = await fetch(`${API_BASE}/performance-test?size=${test.size}`);
+                    await response.arrayBuffer();
+                    const duration = performance.now() - start;
+                    const protocol = response.headers.get('X-Protocol') || 'Unknown';
+                    
+                    results += `  ${protocol}: ${duration.toFixed(2)} ms\n`;
+                } catch (error) {
+                    results += `  Error: ${error.message}\n`;
+                }
+            }
+
+            resultsDiv.textContent = results;
+        }
+
+        // Run connection info on page load
+        window.addEventListener('load', () => {
+            getConnectionInfo();
+        });
+    </script>
+</body>
+</html>

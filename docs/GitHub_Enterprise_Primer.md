@@ -1,252 +1,224 @@
-# GitHub Enterprise Primer
+# GitHub for Enterprise Teams Primer
+## Best Practices for Large-Scale Development
 
-## For Developers Scaling from Small Teams to Large Global Projects
+### Executive Summary
 
-### Table of Contents
+GitHub at enterprise scale requires different strategies than small team development. This primer covers best practices for pull requests, commit messages, branch strategies, and collaborative workflows that maintain quality and velocity across large, distributed teams.
+
+## Table of Contents
+
 1. [Repository Organization](#repository-organization)
 2. [Branching Strategies](#branching-strategies)
-3. [Commit Messages](#commit-messages)
+3. [Commit Message Standards](#commit-message-standards)
 4. [Pull Request Excellence](#pull-request-excellence)
 5. [Code Review Culture](#code-review-culture)
-6. [Issue Management](#issue-management)
-7. [Project Boards](#project-boards)
-8. [Automation with Actions](#automation-with-actions)
-9. [Security and Compliance](#security-and-compliance)
-10. [Global Team Workflows](#global-team-workflows)
+6. [Automation and CI/CD](#automation-and-cicd)
+7. [Security and Compliance](#security-and-compliance)
+8. [Team Collaboration](#team-collaboration)
+9. [Performance at Scale](#performance-at-scale)
+10. [Good Behavior Guidelines](#good-behavior-guidelines)
 
 ## Repository Organization
 
-### Monorepo vs Polyrepo for Enterprise
+### Monorepo vs Polyrepo
 
-```yaml
-Monorepo Structure:
-  collaborative-puzzle/
-    ├── .github/
-    │   ├── workflows/
-    │   ├── CODEOWNERS
-    │   ├── PULL_REQUEST_TEMPLATE/
-    │   └── ISSUE_TEMPLATE/
-    ├── services/
-    │   ├── puzzle-api/
-    │   ├── auth-service/
-    │   ├── notification-service/
-    │   └── shared-libraries/
-    ├── web/
-    │   ├── admin-portal/
-    │   └── puzzle-app/
-    ├── mobile/
-    │   ├── ios/
-    │   └── android/
-    ├── infrastructure/
-    │   ├── terraform/
-    │   └── kubernetes/
-    └── docs/
-
-Polyrepo Structure:
-  org/puzzle-api
-  org/puzzle-web
-  org/puzzle-mobile
-  org/puzzle-infrastructure
-  org/puzzle-shared
+#### Monorepo Structure
+```
+company-monorepo/
+├── services/
+│   ├── authentication/
+│   ├── payment/
+│   └── notification/
+├── libraries/
+│   ├── common/
+│   └── shared-components/
+├── tools/
+│   ├── build/
+│   └── deploy/
+├── docs/
+└── .github/
+    ├── workflows/
+    ├── CODEOWNERS
+    └── pull_request_template.md
 ```
 
-### Repository Settings for Large Teams
+#### When to Use Monorepo
+- Shared code and dependencies
+- Atomic cross-service changes
+- Unified versioning
+- Consistent tooling
+
+#### When to Use Polyrepo
+- Independent service lifecycles
+- Different technology stacks
+- Separate team ownership
+- Compliance boundaries
+
+### Repository Naming Conventions
 
 ```yaml
-Branch Protection Rules:
-  main:
-    - Require pull request reviews: 2
-    - Dismiss stale reviews: true
-    - Require review from CODEOWNERS: true
-    - Require status checks: true
-    - Require branches up to date: true
-    - Include administrators: true
-    - Restrict push access: true
+Naming Standards:
+  Services: {company}-{service}-{type}
+    Example: acme-payment-api
     
-  develop:
-    - Require pull request reviews: 1
-    - Require status checks: true
-    - No direct pushes allowed
-
-Repository Permissions:
-  Teams:
-    core-maintainers: Admin
-    senior-developers: Write
-    developers: Write
-    contractors: Read
-    qa-team: Read
-```
-
-### CODEOWNERS File
-
-```bash
-# .github/CODEOWNERS
-# Global owners
-* @org/core-maintainers
-
-# Frontend
-/web/ @org/frontend-team @org/ui-architects
-/mobile/ @org/mobile-team
-*.css @org/ui-team
-*.scss @org/ui-team
-
-# Backend
-/services/ @org/backend-team
-/services/auth-service/ @org/security-team @org/backend-team
-/services/payment-service/ @org/payment-team @org/security-team
-
-# Infrastructure
-/infrastructure/ @org/devops-team
-/k8s/ @org/platform-team
-*.tf @org/infrastructure-team
-
-# Documentation
-/docs/ @org/tech-writers @org/core-maintainers
-*.md @org/documentation-team
-
-# Security-sensitive files
-.env* @org/security-team
-**/secrets/ @org/security-team
-**/security/ @org/security-team
+  Libraries: {company}-{language}-{purpose}
+    Example: acme-java-commons
+    
+  Tools: {company}-tools-{name}
+    Example: acme-tools-deploy
+    
+  Documentation: {company}-docs-{topic}
+    Example: acme-docs-architecture
 ```
 
 ## Branching Strategies
 
 ### Git Flow for Enterprise
 
-```bash
-# Main branches
-main                    # Production-ready code
-├── develop            # Integration branch
-├── release/2024.1     # Release preparation
-├── hotfix/cve-2024    # Emergency fixes
-
-# Feature branches
-feature/JIRA-1234-user-authentication
-feature/JIRA-5678-payment-integration
-
-# Team-specific patterns
-feature/team-alpha/sprint-23/story-123
-feature/team-beta/epic-456/subtask-789
+```mermaid
+gitGraph
+    commit
+    branch develop
+    checkout develop
+    commit
+    branch feature/user-auth
+    checkout feature/user-auth
+    commit
+    commit
+    checkout develop
+    merge feature/user-auth
+    branch release/1.0
+    checkout release/1.0
+    commit
+    checkout main
+    merge release/1.0
+    checkout develop
+    merge release/1.0
 ```
 
 ### Branch Naming Conventions
 
 ```yaml
-Pattern: {type}/{ticket}-{description}
-Examples:
-  feature/PROJ-123-add-oauth-support
-  bugfix/PROJ-456-fix-memory-leak
-  hotfix/PROJ-789-security-patch
-  chore/PROJ-012-update-dependencies
-  docs/PROJ-345-api-documentation
-
-Types:
-  feature: New functionality
-  bugfix: Bug fixes
-  hotfix: Emergency production fixes
-  chore: Maintenance tasks
-  docs: Documentation only
-  test: Test additions/fixes
-  refactor: Code refactoring
-  perf: Performance improvements
+Branch Types:
+  Feature: feature/{ticket-id}-{brief-description}
+    Example: feature/JIRA-1234-add-oauth-support
+    
+  Bugfix: bugfix/{ticket-id}-{brief-description}
+    Example: bugfix/JIRA-5678-fix-memory-leak
+    
+  Hotfix: hotfix/{ticket-id}-{brief-description}
+    Example: hotfix/JIRA-9012-critical-security-patch
+    
+  Release: release/{version}
+    Example: release/2.1.0
+    
+  Experiment: experiment/{username}-{description}
+    Example: experiment/jdoe-new-caching-strategy
 ```
 
-## Commit Messages
+### Branch Protection Rules
 
-### Conventional Commits Standard
+```yaml
+Main Branch Protection:
+  - Require pull request reviews: 2
+  - Dismiss stale reviews: true
+  - Require review from CODEOWNERS: true
+  - Require status checks: true
+  - Require branches up to date: true
+  - Include administrators: false
+  - Restrict push access: true
 
-```bash
-# Format
+Develop Branch Protection:
+  - Require pull request reviews: 1
+  - Require status checks: true
+  - No force pushes: true
+```
+
+## Commit Message Standards
+
+### Conventional Commits
+
+```
 <type>(<scope>): <subject>
 
 <body>
 
 <footer>
-
-# Examples
-feat(auth): implement OAuth2 login flow
-
-- Add Google OAuth provider
-- Add Microsoft OAuth provider  
-- Create OAuth callback handler
-- Update user model with provider info
-
-Closes #123, #456
-BREAKING CHANGE: OAuth config now required
-
-fix(api): resolve memory leak in connection pool
-
-The connection pool was not properly releasing connections
-after timeout, causing memory to grow unbounded.
-
-- Implement proper connection disposal
-- Add connection timeout handler
-- Add metrics for pool monitoring
-
-Fixes #789
 ```
 
-### Commit Types and Scopes
+#### Types
+- **feat**: New feature
+- **fix**: Bug fix
+- **docs**: Documentation changes
+- **style**: Code style changes (formatting, semicolons, etc.)
+- **refactor**: Code refactoring
+- **perf**: Performance improvements
+- **test**: Adding or modifying tests
+- **build**: Build system changes
+- **ci**: CI configuration changes
+- **chore**: Maintenance tasks
+- **revert**: Revert previous commit
 
-```yaml
-Types:
-  feat: New feature
-  fix: Bug fix
-  docs: Documentation changes
-  style: Code style changes (formatting, etc)
-  refactor: Code changes that neither fix bugs nor add features
-  perf: Performance improvements
-  test: Test additions or corrections
-  build: Build system changes
-  ci: CI configuration changes
-  chore: Maintenance tasks
-  revert: Revert previous commit
+#### Examples
 
-Scopes (examples):
-  api: API changes
-  auth: Authentication
-  ui: User interface
-  db: Database
-  config: Configuration
-  deps: Dependencies
-  security: Security-related
-  i18n: Internationalization
+```bash
+# Feature commit
+feat(auth): implement OAuth 2.0 login flow
+
+- Add OAuth provider configuration
+- Implement callback handling
+- Add token refresh mechanism
+
+Closes #123
+
+# Bug fix commit
+fix(payment): resolve race condition in payment processing
+
+The payment service was experiencing race conditions when processing
+multiple transactions simultaneously. This fix implements proper
+locking mechanisms using Redis distributed locks.
+
+Bug: JIRA-5678
+See-also: #456, #789
+
+# Breaking change commit
+feat(api)!: change user endpoint response format
+
+BREAKING CHANGE: The /api/users endpoint now returns a paginated
+response instead of a flat array. Clients need to update their
+parsing logic.
+
+Migration guide: docs/migrations/v2-api-changes.md
 ```
 
-### Commit Message Guidelines
+### Commit Message Template
 
-```markdown
-## DO's
-- Use imperative mood ("add" not "added")
-- Keep subject line under 50 characters
-- Capitalize the subject line
-- Don't end subject with period
-- Separate subject from body with blank line
-- Wrap body at 72 characters
-- Explain what and why, not how
-- Reference issues and PRs
+```bash
+# .gitmessage.txt
+# <type>(<scope>): <subject>
+# 
+# <body>
+# 
+# <footer>
 
-## DON'Ts
-- Don't use generic messages ("fix bug", "update")
-- Don't combine unrelated changes
-- Don't commit commented-out code
-- Don't commit debugging code
-- Don't use emoji (unless team convention)
+# Type: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+# Scope: The area of the codebase affected (e.g., auth, payment, ui)
+# Subject: Brief description in imperative mood (max 50 chars)
+# 
+# Body: Detailed explanation of what and why (wrap at 72 chars)
+# - Use bullet points for multiple items
+# - Explain the problem being solved
+# - Describe any limitations or future work
+# 
+# Footer: References to issues, breaking changes, etc.
+# - Closes #123
+# - Bug: JIRA-456
+# - BREAKING CHANGE: Description of the breaking change
+```
 
-## Good vs Bad Examples
-
-❌ Bad:
-- "Fixed stuff"
-- "Updated code"
-- "bug fix"
-- "Adding new feature for users to login with social media"
-
-✅ Good:
-- "fix(auth): resolve token expiration edge case"
-- "feat(ui): add dark mode toggle to settings"
-- "perf(api): optimize database query for user search"
-- "docs(readme): add installation instructions for Windows"
+Configure globally:
+```bash
+git config --global commit.template ~/.gitmessage.txt
 ```
 
 ## Pull Request Excellence
@@ -254,346 +226,203 @@ Scopes (examples):
 ### PR Template
 
 ```markdown
+<!-- .github/pull_request_template.md -->
 ## Description
-Brief description of what this PR does
+Brief description of what this PR does.
 
 ## Type of Change
-- [ ] 🐛 Bug fix (non-breaking change)
-- [ ] ✨ New feature (non-breaking change)
-- [ ] 💥 Breaking change
-- [ ] 📝 Documentation update
-- [ ] ♻️ Refactoring
-- [ ] ⚡ Performance improvement
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
 
 ## Related Issues
-Closes #123
-Relates to #456
-
-## Changes Made
-- List of specific changes
-- Implementation approach
-- Any design decisions
+Closes #(issue number)
 
 ## Testing
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
+- [ ] Unit tests pass
+- [ ] Integration tests pass
 - [ ] Manual testing completed
-- [ ] Performance testing completed
-
-## Screenshots
-If applicable, add screenshots
 
 ## Checklist
-- [ ] Self-review completed
-- [ ] Code follows style guidelines
-- [ ] Comments added for complex logic
-- [ ] Documentation updated
-- [ ] No new warnings
-- [ ] Tests pass locally
-- [ ] PR title follows conventional commits
+- [ ] My code follows the style guidelines
+- [ ] I have performed a self-review
+- [ ] I have commented my code in hard-to-understand areas
+- [ ] I have made corresponding changes to the documentation
+- [ ] My changes generate no new warnings
+- [ ] I have added tests that prove my fix/feature works
+- [ ] New and existing unit tests pass locally
+- [ ] Any dependent changes have been merged
 
-## Breaking Changes
-List any breaking changes and migration guide
+## Screenshots (if appropriate)
 
-## Dependencies
-- [ ] Database migration required
-- [ ] Configuration changes needed
-- [ ] Infrastructure changes required
+## Performance Impact
+Describe any performance implications and benchmarks if relevant.
+
+## Security Considerations
+List any security implications of this change.
 
 ## Deployment Notes
-Special instructions for deployment
-
-## Reviewers
-@team-lead - Required
-@domain-expert - For business logic
-@security-team - If security implications
+Special instructions for deployment (if any).
 ```
 
-### PR Best Practices
+### PR Size Guidelines
 
 ```yaml
-Size Guidelines:
-  Ideal: < 400 lines
-  Maximum: < 1000 lines
-  
-  If larger:
-    - Split into multiple PRs
-    - Create feature branch with sub-PRs
-    - Use stacked PRs approach
-
-PR Lifecycle:
-  1. Create Draft PR early
-  2. Add [WIP] prefix while working
-  3. Push commits regularly
-  4. Request reviews when ready
-  5. Address feedback promptly
-  6. Keep PR updated with base branch
-  7. Squash or merge based on team convention
-
-Good PR Titles:
-  - "feat(api): Add pagination to user endpoint (#123)"
-  - "fix(auth): Resolve race condition in token refresh (#456)"
-  - "docs(api): Update OpenAPI schema for v2 endpoints (#789)"
-  
-Bad PR Titles:
-  - "Fixed bug"
-  - "Updates"
-  - "JIRA-123"
-  - "Work on feature"
+PR Size Recommendations:
+  Small (Preferred):
+    - < 100 lines changed
+    - Single logical change
+    - Review time: < 30 minutes
+    
+  Medium (Acceptable):
+    - 100-500 lines changed
+    - Related changes
+    - Review time: 30-60 minutes
+    
+  Large (Avoid):
+    - > 500 lines changed
+    - Should be split if possible
+    - Review time: > 1 hour
+    
+  Exceptions:
+    - Generated code
+    - Vendor updates
+    - Large refactoring (with prior discussion)
 ```
 
-### Stacked PRs for Large Features
+### Effective PR Descriptions
 
-```bash
-# Base feature branch
-feature/epic-oauth-integration
-  │
-  ├── PR #1: feat(auth): add OAuth provider interface
-  │
-  ├── PR #2: feat(auth): implement Google OAuth
-  │
-  ├── PR #3: feat(auth): implement Microsoft OAuth
-  │
-  └── PR #4: feat(ui): add OAuth login buttons
+#### Good Example
+```markdown
+## Add distributed caching to user service
 
-# Each PR builds on previous, reviewed independently
+### What
+Implements Redis-based distributed caching for user profile data to reduce database load.
+
+### Why
+- Database CPU utilization hitting 80% during peak hours
+- User profile queries account for 40% of all database queries
+- 95% of user profiles are accessed repeatedly within 5 minutes
+
+### How
+- Added Redis client configuration
+- Implemented cache-aside pattern for user profile queries
+- Set 5-minute TTL for cache entries
+- Added cache invalidation on profile updates
+
+### Performance Impact
+- Reduced average response time from 150ms to 20ms
+- Database load decreased by 35%
+- Redis memory usage: ~2GB for 100k active users
+
+### Testing
+- Unit tests for cache operations
+- Integration tests with Redis test container
+- Load testing shows 5x throughput improvement
 ```
 
 ## Code Review Culture
 
-### Code Review Guidelines
+### Review Checklist
 
 ```markdown
-## For Reviewers
+## Code Review Checklist
 
-### Review Checklist
-- [ ] Does the code do what it's supposed to?
-- [ ] Is the code readable and maintainable?
-- [ ] Are there tests?
-- [ ] Is there appropriate error handling?
-- [ ] Are there security implications?
-- [ ] Is the performance acceptable?
-- [ ] Does it follow team conventions?
+### Functionality
+- [ ] Does the code do what it's supposed to do?
+- [ ] Are edge cases handled?
+- [ ] Is error handling appropriate?
 
-### Comment Types
-🔍 **[Question]**: Seeking clarification
-💡 **[Suggestion]**: Non-blocking improvement
-⚠️ **[Issue]**: Should be addressed
-🚨 **[Blocker]**: Must be fixed before merge
-💭 **[Thought]**: General observation
-📚 **[Learning]**: Educational comment
+### Design
+- [ ] Is the code well-structured?
+- [ ] Does it follow SOLID principles?
+- [ ] Is it maintainable and extensible?
 
-### Good Review Comments
-✅ "Consider extracting this logic into a helper method for reusability"
-✅ "This could throw a NullReferenceException if user is null. Add a null check?"
-✅ "Great use of the strategy pattern here! 👍"
-✅ "For future reference, we have a utility for this in SharedLib.Helpers"
+### Performance
+- [ ] Are there any obvious performance issues?
+- [ ] Is caching used appropriately?
+- [ ] Are database queries optimized?
 
-### Poor Review Comments
-❌ "This is wrong"
-❌ "I don't like this"
-❌ "Why did you do it this way?"
-❌ "Rewrite this entire section"
+### Security
+- [ ] Are inputs validated?
+- [ ] Is authentication/authorization correct?
+- [ ] Are secrets handled properly?
+
+### Testing
+- [ ] Is test coverage adequate?
+- [ ] Are tests meaningful?
+- [ ] Do tests cover edge cases?
+
+### Documentation
+- [ ] Is complex logic commented?
+- [ ] Are public APIs documented?
+- [ ] Is the README updated if needed?
+```
+
+### Review Comments Best Practices
+
+#### Constructive Feedback
+
+```markdown
+# Good Examples
+
+## Suggesting improvement
+"Consider using a map here instead of repeated lookups. This would reduce complexity from O(n²) to O(n)."
+
+## Asking for clarification
+"I'm not sure I understand why we need this check. Could you explain the scenario where this would be necessary?"
+
+## Praising good code
+"Nice use of the builder pattern here! This makes the configuration much more readable."
+
+## Security concern
+"This SQL query appears to be vulnerable to injection. Consider using parameterized queries instead."
+
+# Poor Examples
+
+## Too vague
+"This doesn't look right."
+
+## Too harsh
+"This is terrible code."
+
+## Nitpicking
+"Missing period at end of comment."
+
+## Personal
+"I wouldn't do it this way."
 ```
 
 ### Review Response Etiquette
 
 ```markdown
-## For Authors
+## Responding to Feedback
 
-### Responding to Feedback
-- Thank reviewers for their time
-- Acknowledge all comments
-- Explain your reasoning when disagreeing
-- Update PR description with changes made
+### Accepting suggestions
+"Good catch! I'll update this to use parameterized queries."
 
-### Response Examples
-```
-> "Consider using LINQ here for readability"
+### Explaining decisions
+"I chose this approach because [reasoning]. However, I'm open to alternatives if you think there's a better way."
 
-✅ "Good suggestion! Updated in commit abc123"
-✅ "I considered LINQ but went with a loop for performance. Here's my benchmark: ..."
-✅ "You're right, this is clearer. Changed to use LINQ."
+### Asking for clarification
+"I'm not sure I follow your suggestion. Could you provide an example of what you mean?"
 
-❌ "No"
-❌ "That's not better"
-❌ "I like my way"
+### Disagreeing respectfully
+"I see your point, but I think the current approach might be better because [reasoning]. What do you think?"
 ```
 
-### Handling Disagreements
-1. Assume positive intent
-2. Focus on the code, not the person
-3. Provide data/examples when possible
-4. Escalate to tech lead if needed
-5. Document decision in ADR if significant
-```
+## Automation and CI/CD
 
-## Issue Management
-
-### Issue Templates
+### GitHub Actions for Enterprise
 
 ```yaml
-# .github/ISSUE_TEMPLATE/bug_report.yml
-name: Bug Report
-description: File a bug report
-labels: ["bug", "triage"]
-assignees:
-  - octocat
-body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for taking the time to fill out this bug report!
-  
-  - type: textarea
-    id: description
-    attributes:
-      label: Bug Description
-      description: Clear and concise description
-      placeholder: Tell us what you see!
-    validations:
-      required: true
-      
-  - type: dropdown
-    id: severity
-    attributes:
-      label: Severity
-      options:
-        - Critical (Production Down)
-        - High (Major Feature Broken)
-        - Medium (Minor Feature Issue)
-        - Low (Cosmetic/Edge Case)
-    validations:
-      required: true
-      
-  - type: textarea
-    id: reproduction
-    attributes:
-      label: Steps to Reproduce
-      description: How can we reproduce this?
-      value: |
-        1. Go to '...'
-        2. Click on '....'
-        3. Scroll down to '....'
-        4. See error
-    validations:
-      required: true
-```
-
-### Issue Labeling System
-
-```yaml
-Priority Labels:
-  - P0-critical: Production down
-  - P1-high: Major feature broken
-  - P2-medium: Should fix soon
-  - P3-low: Nice to have
-
-Type Labels:
-  - bug: Something isn't working
-  - enhancement: New feature request
-  - documentation: Documentation improvements
-  - question: Further information requested
-  - duplicate: This issue already exists
-  - wontfix: This will not be worked on
-
-Status Labels:
-  - triage: Needs evaluation
-  - ready: Ready to work on
-  - in-progress: Being worked on
-  - blocked: Blocked by dependency
-  - review: In code review
-  - testing: In QA testing
-
-Component Labels:
-  - frontend: UI-related
-  - backend: API/Server
-  - database: Database-related
-  - infrastructure: DevOps/Infra
-  - mobile: Mobile apps
-  - security: Security-related
-
-Team Labels:
-  - team-alpha: Assigned to Alpha
-  - team-beta: Assigned to Beta
-  - team-platform: Platform team
-```
-
-## Project Boards
-
-### Kanban Board Setup
-
-```yaml
-Columns:
-  Backlog:
-    - Automation: Add new issues
-    - Limit: None
-    
-  Ready:
-    - Automation: None
-    - Limit: 2x team size
-    - Description: Refined and ready to start
-    
-  In Progress:
-    - Automation: Move when PR created
-    - Limit: 1-2 per developer
-    - Description: Active development
-    
-  In Review:
-    - Automation: Move when review requested
-    - Limit: Team size
-    - Description: PR under review
-    
-  Testing:
-    - Automation: Move when approved
-    - Limit: 5
-    - Description: QA testing
-    
-  Done:
-    - Automation: Move when PR merged
-    - Limit: None
-    - Description: Completed this sprint
-```
-
-### Sprint Planning with Projects
-
-```markdown
-## Sprint Planning Template
-
-### Sprint 23 Goals
-- Complete OAuth integration
-- Fix critical production bugs
-- Improve API performance
-
-### Capacity Planning
-| Developer | Capacity | Assigned Points |
-|-----------|----------|-----------------|
-| Alice     | 13       | 13              |
-| Bob       | 13       | 12              |
-| Carol     | 8 (vacation) | 8           |
-
-### Risk Items
-- [ ] OAuth provider API changes
-- [ ] Database migration complexity
-- [ ] Third-party service reliability
-
-### Dependencies
-- Security team review for OAuth
-- DevOps support for deployment
-- UX designs for login flow
-```
-
-## Automation with Actions
-
-### CI/CD Workflow
-
-```yaml
-# .github/workflows/ci-cd.yml
-name: CI/CD Pipeline
+# .github/workflows/main.yml
+name: Main CI/CD Pipeline
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    branches: [main, develop]
   push:
     branches: [main, develop]
 
@@ -605,352 +434,442 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
+      - uses: actions/checkout@v3
+      
       - name: Validate PR Title
         if: github.event_name == 'pull_request'
         uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+        
       - name: Check Commit Messages
         uses: wagoid/commitlint-github-action@v5
-        
+
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       
-      - name: Run Trivy security scan
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          
-      - name: Run Snyk security scan
-        uses: snyk/actions/dotnet@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          
+        
+      - name: Run CodeQL analysis
+        uses: github/codeql-action/analyze@v2
+        
+      - name: Check secrets
+        uses: trufflesecurity/trufflehog@main
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        
+      - name: Code Coverage
+        run: |
+          npm test -- --coverage
+          bash <(curl -s https://codecov.io/bash)
+
   build-and-test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [api, web, mobile]
+        node-version: [16.x, 18.x, 20.x]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
         with:
-          dotnet-version: '8.0.x'
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
           
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          
+      - name: Install dependencies
+        run: npm ci
+        
       - name: Build
-        run: dotnet build ./src/${{ matrix.project }}
+        run: npm run build
         
       - name: Test
-        run: dotnet test ./tests/${{ matrix.project }}.Tests
-        
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./coverage.xml
-          flags: ${{ matrix.project }}
+        run: npm test
 ```
 
-### PR Automation
+### Required Status Checks
 
 ```yaml
-# .github/workflows/pr-automation.yml
-name: PR Automation
-
-on:
-  pull_request:
-    types: [opened, edited]
-
-jobs:
-  label:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/labeler@v4
-        with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
-          
-      - name: Add size labels
-        uses: codelytv/pr-size-labeler@v1
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          xs_label: 'size/XS'
-          xs_max_size: 10
-          s_label: 'size/S'
-          s_max_size: 100
-          m_label: 'size/M'
-          m_max_size: 500
-          l_label: 'size/L'
-          l_max_size: 1000
-          xl_label: 'size/XL'
-          
-  assign:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Auto-assign PR
-        uses: kentaro-m/auto-assign-action@v1.2.5
-        with:
-          configuration-path: '.github/auto-assign.yml'
-          
-  notify:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify Slack
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: 'New PR opened: ${{ github.event.pull_request.title }}'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+Branch Protection Status Checks:
+  Required:
+    - CI / build-and-test
+    - CI / security
+    - CI / quality
+    - CodeQL
+    - License Check
+    
+  Optional but Recommended:
+    - Performance Tests
+    - E2E Tests
+    - Visual Regression Tests
 ```
 
 ## Security and Compliance
 
+### CODEOWNERS File
+
+```
+# .github/CODEOWNERS
+
+# Global owners
+* @company/architects
+
+# Frontend
+/frontend/ @company/frontend-team
+/frontend/payments/ @company/payments-team @company/frontend-team
+
+# Backend services
+/services/auth/ @company/security-team
+/services/payment/ @company/payments-team @company/security-team
+/services/user/ @company/platform-team
+
+# Infrastructure
+/infrastructure/ @company/devops-team
+/k8s/ @company/devops-team @company/security-team
+
+# Documentation
+/docs/ @company/docs-team
+*.md @company/docs-team
+
+# Security-sensitive files
+**/security/ @company/security-team
+**/crypto/ @company/security-team
+.github/workflows/ @company/devops-team @company/security-team
+```
+
 ### Security Policies
 
 ```markdown
-# SECURITY.md
+<!-- .github/SECURITY.md -->
+# Security Policy
 
-## Security Policy
+## Supported Versions
 
-### Supported Versions
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 2.1.x   | :white_check_mark: |
+| 2.0.x   | :white_check_mark: |
+| 1.9.x   | :x:                |
 
-### Reporting a Vulnerability
-1. **DO NOT** open a public issue
-2. Email security@company.com
-3. Include:
-   - Description of vulnerability
+## Reporting a Vulnerability
+
+1. **DO NOT** create a public issue
+2. Email security@company.com with:
+   - Description of the vulnerability
    - Steps to reproduce
    - Potential impact
    - Suggested fix (if any)
 
-### Response Timeline
-- Initial response: 24 hours
-- Status update: 72 hours
-- Fix timeline: Based on severity
+## Security Review Process
+
+All PRs modifying security-sensitive areas require:
+1. Review from security team
+2. Passing security scan
+3. Threat modeling update (if applicable)
 ```
 
-### Branch Protection for Compliance
+### Dependency Management
 
 ```yaml
-Compliance Requirements:
-  SOC2:
-    - No direct commits to main
-    - All changes via PR
-    - Minimum 2 reviewers
-    - All checks must pass
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    security-updates-only: true
+    labels:
+      - "dependencies"
+      - "security"
+    reviewers:
+      - "company/security-team"
     
-  HIPAA:
-    - Security scan required
-    - Audit log retention
-    - Access logging enabled
-    
-  GDPR:
-    - Data classification labels
-    - Privacy review for data changes
-    - Encryption verification
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "docker"
+      - "dependencies"
 ```
 
-## Global Team Workflows
+## Team Collaboration
 
-### Time Zone Aware Practices
-
-```yaml
-Async-First Communication:
-  PR Reviews:
-    - 24-hour SLA for initial review
-    - Detailed comments for clarity
-    - Video explanations for complex changes
-    - Clear "done" criteria
-    
-  Issue Updates:
-    - Daily status in issue comments
-    - Clear handoff notes
-    - Time zone in signatures
-    - Next action clearly stated
-    
-Meeting-Free Zones:
-  - 00:00-08:00 UTC: Asia focus time
-  - 08:00-16:00 UTC: Europe focus time  
-  - 16:00-00:00 UTC: Americas focus time
-```
-
-### Cultural Considerations
+### Issue Templates
 
 ```markdown
-## Communication Styles
+<!-- .github/ISSUE_TEMPLATE/bug_report.md -->
+---
+name: Bug Report
+about: Create a report to help us improve
+title: '[BUG] '
+labels: 'bug, needs-triage'
+assignees: ''
+---
 
-### Direct Feedback Cultures (US, Germany, Netherlands)
-```diff
-+ "This approach won't scale. Consider using pattern X instead."
-+ "The performance impact is unacceptable. Please optimize."
+## Bug Description
+A clear and concise description of the bug.
+
+## To Reproduce
+Steps to reproduce the behavior:
+1. Go to '...'
+2. Click on '....'
+3. Scroll down to '....'
+4. See error
+
+## Expected Behavior
+What you expected to happen.
+
+## Actual Behavior
+What actually happened.
+
+## Environment
+- OS: [e.g. Ubuntu 20.04]
+- Browser: [e.g. Chrome 91]
+- Version: [e.g. 2.1.0]
+
+## Additional Context
+Add any other context, logs, or screenshots.
 ```
 
-### Indirect Feedback Cultures (Japan, India, UK)
-```diff
-+ "I wonder if we might explore alternative approaches?"
-+ "Perhaps we could investigate the performance characteristics?"
+### Project Boards
+
+```yaml
+Project Board Structure:
+  Backlog:
+    - New issues
+    - Refined stories
+    - Tech debt items
+    
+  To Do:
+    - Sprint committed items
+    - Ready for development
+    
+  In Progress:
+    - Actively being worked on
+    - WIP limit: 2 per developer
+    
+  In Review:
+    - PR opened
+    - Awaiting review
+    
+  Testing:
+    - Code review complete
+    - QA testing
+    
+  Done:
+    - Merged to develop
+    - Deployed to staging
 ```
 
-### Universal Best Practices
-- Start with appreciation
-- Be specific with examples
-- Offer solutions, not just problems
-- Use "we" instead of "you"
-- Acknowledge cultural holidays
+### Labels System
+
+```yaml
+Label Categories:
+  Type:
+    - bug
+    - feature
+    - enhancement
+    - documentation
+    - refactor
+    
+  Priority:
+    - P0-critical
+    - P1-high
+    - P2-medium
+    - P3-low
+    
+  Status:
+    - needs-triage
+    - ready
+    - blocked
+    - in-progress
+    - needs-review
+    
+  Component:
+    - frontend
+    - backend
+    - infrastructure
+    - security
+    
+  Effort:
+    - effort-1 (< 1 day)
+    - effort-2 (1-3 days)
+    - effort-3 (3-5 days)
+    - effort-5 (1-2 weeks)
+    - effort-8 (> 2 weeks)
 ```
 
-### Handoff Documentation
+## Performance at Scale
+
+### Large Repository Optimization
+
+```bash
+# Clone with limited depth
+git clone --depth 1 https://github.com/company/large-repo
+
+# Use sparse checkout for monorepos
+git sparse-checkout init --cone
+git sparse-checkout set services/my-service
+
+# Enable Git LFS for large files
+git lfs track "*.psd"
+git lfs track "*.zip"
+git add .gitattributes
+
+# Use partial clone
+git clone --filter=blob:none https://github.com/company/repo
+```
+
+### CI/CD Optimization
+
+```yaml
+# Use caching effectively
+- name: Cache dependencies
+  uses: actions/cache@v3
+  with:
+    path: ~/.npm
+    key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+    restore-keys: |
+      ${{ runner.os }}-node-
+
+# Parallelize jobs
+jobs:
+  test:
+    strategy:
+      matrix:
+        test-suite: [unit, integration, e2e]
+    steps:
+      - run: npm run test:${{ matrix.test-suite }}
+
+# Use conditional jobs
+security-scan:
+  if: |
+    github.event_name == 'pull_request' &&
+    contains(github.event.pull_request.labels.*.name, 'security')
+```
+
+## Good Behavior Guidelines
+
+### The Golden Rules
+
+1. **Be Respectful**
+   - Assume positive intent
+   - Focus on the code, not the person
+   - Acknowledge others' expertise
+
+2. **Be Responsive**
+   - Respond to PR reviews within 1 business day
+   - Update PR status when working on feedback
+   - Communicate delays or blockers
+
+3. **Be Thorough**
+   - Test your code before pushing
+   - Self-review before requesting reviews
+   - Document non-obvious decisions
+
+4. **Be Collaborative**
+   - Pair on complex problems
+   - Share knowledge through comments
+   - Mentor junior developers
+
+### Communication Guidelines
 
 ```markdown
-## Daily Handoff Template
+## Async Communication Best Practices
 
-### Date: 2024-01-15
-### From: US Team → APAC Team
+### PR Comments
+- Use threads for discussions
+- Resolve threads when addressed
+- Tag relevant experts with @mentions
 
-#### Completed Today
-- ✅ Merged PR #123 (OAuth implementation)
-- ✅ Fixed critical bug in payment service
-- ✅ Updated documentation for API v2
+### Issue Updates
+- Update status weekly for long-running issues
+- Link related PRs and issues
+- Close with clear resolution notes
 
-#### In Progress
-- 🔄 PR #456 - Needs security review
-  - Blocker: Waiting for security team
-  - Next: Address comments once received
-  
-- 🔄 Issue #789 - Database optimization
-  - Status: Query analysis complete
-  - Next: Implement index changes
-
-#### Needs Attention
-- 🚨 Production alert at 23:45 UTC
-  - Temporary fix applied
-  - Root cause analysis needed
-  
-#### Questions for Your Team
-1. Can you verify the fix works in APAC region?
-2. Do we need translations for new OAuth screens?
-
-#### Notes
-- Jenkins build #2345 is flaky, rerun if fails
-- Customer X reported issue, high priority
+### Notifications
+- Configure notification settings appropriately
+- Use @here sparingly in Slack integrations
+- Respect focus time and time zones
 ```
 
-## GitHub Enterprise Features
-
-### Advanced Security
+### Escalation Process
 
 ```yaml
-Dependabot:
-  version-updates:
-    - package-ecosystem: "nuget"
-      directory: "/"
-      schedule:
-        interval: "weekly"
-      reviewers:
-        - "security-team"
-        
-  security-updates:
-    - package-ecosystem: "npm"
-      directory: "/web"
-      schedule:
-        interval: "daily"
-        
-Code Scanning:
-  - CodeQL analysis
-  - Secret scanning
-  - Dependency review
-  - Security advisories
-```
-
-### Insights and Analytics
-
-```yaml
-Metrics to Track:
-  Team Performance:
-    - PR merge time
-    - Review turnaround
-    - Deployment frequency
-    - Failed deployments
+Escalation Path:
+  Level 1:
+    - Try to resolve with PR author
+    - Seek clarification in comments
     
-  Code Quality:
-    - Code coverage trends
-    - Technical debt
-    - Security vulnerabilities
-    - Performance metrics
+  Level 2:
+    - Tag team lead for input
+    - Schedule sync discussion if needed
     
-  Collaboration:
-    - PR participation
-    - Issue resolution time
-    - Cross-team contributions
-    - Documentation updates
+  Level 3:
+    - Involve engineering manager
+    - Architecture review if design dispute
+    
+  Level 4:
+    - CTO/VP Engineering decision
+    - Document decision in ADR
 ```
 
 ## Best Practices Summary
 
-### The 10 Commandments of Enterprise GitHub
+### Do's
+- ✅ Write clear, atomic commits
+- ✅ Keep PRs small and focused
+- ✅ Review code promptly and thoroughly
+- ✅ Use automation to enforce standards
+- ✅ Document decisions and context
+- ✅ Be kind and constructive in reviews
+- ✅ Test before pushing
+- ✅ Keep dependencies up to date
 
-1. **Write Clear Commit Messages**: Future you will thank present you
-2. **Keep PRs Small**: Easier to review, faster to merge
-3. **Review Promptly**: Respect your colleagues' time
-4. **Document Decisions**: ADRs for architectural choices
-5. **Automate Everything**: If you do it twice, automate it
-6. **Secure by Default**: Security is everyone's responsibility
-7. **Test Before Merge**: Broken builds block everyone
-8. **Communicate Asynchronously**: Not everyone is in your timezone
-9. **Be Kind in Reviews**: There's a human on the other side
-10. **Learn Continuously**: GitHub features evolve, stay updated
+### Don'ts
+- ❌ Force push to shared branches
+- ❌ Merge without required approvals
+- ❌ Ignore CI failures
+- ❌ Leave PRs open indefinitely
+- ❌ Make personal attacks in reviews
+- ❌ Commit secrets or credentials
+- ❌ Skip documentation updates
+- ❌ Bypass security scans
 
-### Quick Reference Card
+## Tools and Resources
 
-```bash
-# Daily Workflow
-git checkout develop
-git pull origin develop
-git checkout -b feature/JIRA-123-description
-# ... make changes ...
-git add -p  # Stage chunks interactively
-git commit  # Write meaningful message
-git push -u origin feature/JIRA-123-description
-# Create PR via GitHub CLI
-gh pr create --title "feat(component): description" \
-             --body "$(cat .github/pull_request_template.md)" \
-             --reviewer @team-lead \
-             --assignee @me \
-             --label "enhancement" \
-             --project "Sprint 23"
+### Essential Tools
+- **GitHub CLI**: `gh` for command-line operations
+- **Hub**: Alternative CLI tool
+- **Refined GitHub**: Browser extension for enhanced UI
+- **Octotree**: File tree sidebar
+- **GitHub Desktop**: GUI for non-technical stakeholders
 
-# Review Workflow
-gh pr checkout 123
-# ... test changes locally ...
-gh pr review --approve --body "LGTM! Great work on the error handling."
+### Learning Resources
+- GitHub Enterprise documentation
+- GitHub Learning Lab
+- "Effective Pull Requests" course
+- Internal company Git guidelines
+- Team-specific conventions
 
-# Issue Workflow
-gh issue create --title "Bug: Description" \
-                --body "$(cat .github/issue_template.md)" \
-                --label "bug,P2-medium" \
-                --assignee @me
+### Metrics and Monitoring
+- Pull request cycle time
+- Review response time
+- Build success rate
+- Mean time to merge
+- Code coverage trends
 
-# Quick Searches
-gh pr list --search "is:open review-requested:@me"
-gh issue list --search "is:open assignee:@me label:P0-critical"
-```
+## Conclusion
+
+Success with GitHub at enterprise scale requires discipline, consistency, and strong team culture. These practices evolve with your team - regularly retrospect and refine them based on what works for your organization.
+
+Remember: The goal is to ship quality code efficiently while maintaining a positive team dynamic. Tools and processes should enable this, not hinder it.

@@ -140,16 +140,16 @@ public static class RateLimitingExtensions
                 var store = serviceProvider.GetRequiredService<IRateLimitStore>();
                 var partitionKey = GetPartitionKey(httpContext);
 
-                return RateLimitPartition.Get(
+                // Use fixed window limiter with Redis store
+                return RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey,
-                    factory: key => new RedisRateLimiter(
-                        store,
-                        new RedisRateLimiterOptions
-                        {
-                            Window = TimeSpan.FromMinutes(1),
-                            PermitLimit = 100
-                        },
-                        key));
+                    factory: key => new FixedWindowRateLimiterOptions
+                    {
+                        Window = TimeSpan.FromMinutes(1),
+                        PermitLimit = 100,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 50
+                    });
             });
 
             // Handler for rate limit exceeded
@@ -162,7 +162,7 @@ public static class RateLimitingExtensions
                     out var retryAfter))
                 {
                     context.HttpContext.Response.Headers.RetryAfter = 
-                        ((int)retryAfter).ToString();
+                        ((int)retryAfter.TotalSeconds).ToString();
                 }
 
                 await context.HttpContext.Response.WriteAsync(

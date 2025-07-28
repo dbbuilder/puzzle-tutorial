@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: puzzle-api
 spec:
+  replicas: 1
   template:
     spec:
       containers:
@@ -10,12 +11,10 @@ spec:
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: "Development"
-        - name: SignalR__EnableDetailedErrors
-          value: "true"
         resources:
-          limits:
-            memory: "256Mi"
-            cpu: "500m"
           requests:
             memory: "128Mi"
             cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"

@@ -2,7 +2,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: puzzle-api-config
-  namespace: puzzle-platform
+  labels:
+    app: puzzle-api
 data:
   appsettings.Production.json: |
     {
@@ -10,40 +11,43 @@ data:
         "LogLevel": {
           "Default": "Information",
           "Microsoft.AspNetCore": "Warning",
-          "Microsoft.AspNetCore.SignalR": "Debug",
-          "Microsoft.AspNetCore.Http.Connections": "Debug"
+          "Microsoft.AspNetCore.SignalR": "Information",
+          "Microsoft.AspNetCore.Http.Connections": "Information"
         }
       },
       "AllowedHosts": "*",
-      "ConnectionStrings": {
-        "DefaultConnection": "Server=puzzle-db-service;Database=CollaborativePuzzle;User Id=sa;Password=$(SQL_PASSWORD);TrustServerCertificate=true",
-        "Redis": "puzzle-redis-service:6379"
-      },
-      "Cors": {
-        "AllowedOrigins": ["https://puzzle.example.com", "https://admin.puzzle.example.com"]
-      },
       "SignalR": {
         "EnableDetailedErrors": false,
-        "KeepAliveInterval": 15,
-        "ClientTimeoutInterval": 30,
+        "KeepAliveInterval": "00:00:15",
+        "ClientTimeoutInterval": "00:00:30",
+        "HandshakeTimeout": "00:00:15",
         "MaximumReceiveMessageSize": 32768
       },
       "Redis": {
         "InstanceName": "PuzzlePlatform",
+        "Database": 0,
+        "DefaultExpiry": "01:00:00",
         "ConnectRetry": 3,
         "ConnectTimeout": 5000,
         "SyncTimeout": 5000,
         "AbortOnConnectFail": false
       },
-      "MQTT": {
-        "Broker": "puzzle-mqtt-service",
-        "Port": 1883,
-        "ClientId": "puzzle-api",
-        "Username": "",
-        "Password": "",
-        "CleanSession": true,
-        "QualityOfService": 1,
-        "RetainMessages": false
+      "RateLimiting": {
+        "PermitLimit": 100,
+        "Window": "00:01:00",
+        "QueueProcessingOrder": "OldestFirst",
+        "QueueLimit": 50
+      },
+      "Authentication": {
+        "Jwt": {
+          "Issuer": "https://puzzle-api.example.com",
+          "Audience": "https://puzzle-api.example.com",
+          "ExpirationMinutes": 60
+        },
+        "ApiKey": {
+          "HeaderName": "X-API-Key",
+          "CacheDuration": "00:05:00"
+        }
       },
       "WebRTC": {
         "StunServers": [
@@ -52,104 +56,18 @@ data:
         ],
         "TurnServers": [
           {
-            "Urls": ["turn:puzzle-turn-service:3478"],
-            "Username": "puzzle",
-            "Credential": "$(TURN_SECRET)"
+            "Urls": "turn:turn.example.com:3478",
+            "Username": "turnuser",
+            "Credential": "turnpassword"
           }
         ]
-      }
-    }
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nginx-config
-  namespace: puzzle-platform
-data:
-  nginx.conf: |
-    events {
-      worker_connections 1024;
-    }
-    
-    http {
-      upstream puzzle-api {
-        server puzzle-api-service:80;
-      }
-      
-      upstream signalr {
-        server puzzle-api-service:80;
-        keepalive 32;
-      }
-      
-      map $http_upgrade $connection_upgrade {
-        default upgrade;
-        '' close;
-      }
-      
-      server {
-        listen 80;
-        server_name _;
-        
-        # API endpoints
-        location /api {
-          proxy_pass http://puzzle-api;
-          proxy_set_header Host $host;
-          proxy_set_header X-Real-IP $remote_addr;
-          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-          proxy_set_header X-Forwarded-Proto $scheme;
-        }
-        
-        # SignalR endpoints with WebSocket support
-        location /puzzlehub {
-          proxy_pass http://signalr;
-          proxy_http_version 1.1;
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection $connection_upgrade;
-          proxy_set_header Host $host;
-          proxy_cache_bypass $http_upgrade;
-          proxy_buffering off;
-          proxy_read_timeout 86400;
-        }
-        
-        # WebRTC signaling
-        location /webrtchub {
-          proxy_pass http://signalr;
-          proxy_http_version 1.1;
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection $connection_upgrade;
-          proxy_set_header Host $host;
-          proxy_cache_bypass $http_upgrade;
-        }
-        
-        # Socket.IO compatibility
-        location /socket.io/ {
-          proxy_pass http://puzzle-api;
-          proxy_http_version 1.1;
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection $connection_upgrade;
-          proxy_set_header Host $host;
-        }
-        
-        # Raw WebSocket endpoint
-        location /ws {
-          proxy_pass http://puzzle-api;
-          proxy_http_version 1.1;
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection $connection_upgrade;
-          proxy_set_header Host $host;
-          proxy_read_timeout 86400;
-        }
-        
-        # Health checks
-        location /health {
-          proxy_pass http://puzzle-api;
-          access_log off;
-        }
-        
-        # Static files
-        location / {
-          proxy_pass http://puzzle-api;
-          proxy_set_header Host $host;
-        }
+      },
+      "MQTT": {
+        "BrokerAddress": "mqtt-broker",
+        "BrokerPort": 1883,
+        "ClientId": "puzzle-api",
+        "Username": "",
+        "Password": "",
+        "UseTls": false
       }
     }

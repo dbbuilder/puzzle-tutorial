@@ -151,5 +151,12 @@ namespace CollaborativePuzzle.Core.Interfaces
         /// <param name="max">Maximum score</param>
         /// <returns>Number of elements in the range</returns>
         Task<long> SortedSetLengthAsync(string key, double min, double max);
+        
+        /// <summary>
+        /// Gets a numeric value from Redis
+        /// </summary>
+        /// <param name="key">Cache key</param>
+        /// <returns>Numeric value or 0 if not found</returns>
+        Task<long> GetLongAsync(string key);
     }
 }

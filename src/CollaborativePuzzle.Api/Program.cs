@@ -12,6 +12,9 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure HTTP/3 and QUIC support
+builder.ConfigureHttp3();
+
 // Add services to the container
 builder.Services.AddControllers();
 
@@ -118,6 +121,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseHttp3AltSvc(); // Add Alt-Svc header for HTTP/3 discovery
 app.UseStaticFiles(); // Enable static files for test.html
 
 // Enable rate limiting
@@ -150,5 +154,8 @@ app.MapPuzzleEndpoints(versionSet);
 app.MapSessionEndpoints(versionSet);
 app.MapAuthEndpoints(versionSet);
 app.MapRateLimitEndpoints();
+
+// Map HTTP/3 demo endpoints
+app.MapHttp3Endpoints();
 
 app.Run();

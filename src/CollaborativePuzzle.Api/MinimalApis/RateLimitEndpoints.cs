@@ -170,11 +170,11 @@ public static class RateLimitEndpoints
             var timestamp = hour.ToUnixTimeSeconds();
             var hourKey = $"{baseKey}:{timestamp / 3600}";
             
-            var total = await redisService.GetAsync<long>($"{hourKey}:total");
-            var limited = await redisService.GetAsync<long>($"{hourKey}:limited");
-            var success = await redisService.GetAsync<long>($"{hourKey}:success");
-            var clientError = await redisService.GetAsync<long>($"{hourKey}:client_error");
-            var serverError = await redisService.GetAsync<long>($"{hourKey}:server_error");
+            var total = await redisService.GetLongAsync($"{hourKey}:total");
+            var limited = await redisService.GetLongAsync($"{hourKey}:limited");
+            var success = await redisService.GetLongAsync($"{hourKey}:success");
+            var clientError = await redisService.GetLongAsync($"{hourKey}:client_error");
+            var serverError = await redisService.GetLongAsync($"{hourKey}:server_error");
             
             history.Hours.Add(new HourlyUsage
             {

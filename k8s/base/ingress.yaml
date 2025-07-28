@@ -1,79 +1,44 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: puzzle-ingress
-  namespace: puzzle-platform
+  name: puzzle-api-ingress
+  labels:
+    app: puzzle-api
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/websocket-services: "puzzle-api-service"
-    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: "puzzle-api"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+    # Session affinity for SignalR
     nginx.ingress.kubernetes.io/affinity: "cookie"
     nginx.ingress.kubernetes.io/affinity-mode: "persistent"
     nginx.ingress.kubernetes.io/session-cookie-name: "puzzle-session"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "86400"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "86400"
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,X-API-Key"
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - puzzle.example.com
-    secretName: puzzle-tls
+    - puzzle-api.example.com
+    secretName: puzzle-api-tls
   rules:
-  - host: puzzle.example.com
+  - host: puzzle-api.example.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: puzzle-api-service
-            port:
-              number: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: puzzle-websocket-ingress
-  namespace: puzzle-platform
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ws.puzzle.example.com
-    http:
-      paths:
-      - path: /puzzlehub
-        pathType: Prefix
-        backend:
-          service:
-            name: puzzle-api-service
-            port:
-              number: 80
-      - path: /webrtchub
-        pathType: Prefix
-        backend:
-          service:
-            name: puzzle-api-service
-            port:
-              number: 80
-      - path: /socket.io
-        pathType: Prefix
-        backend:
-          service:
-            name: puzzle-api-service
-            port:
-              number: 80
-      - path: /ws
-        pathType: Prefix
-        backend:
-          service:
-            name: puzzle-api-service
+            name: puzzle-api
             port:
               number: 80

@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: puzzle-platform-prod
+
+bases:
+  - ../../base
+
+commonLabels:
+  environment: production
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - hpa-patch.yaml
+
+secretGenerator:
+  - name: puzzle-secrets
+    behavior: merge
+    envs:
+      - secrets.env
+
+images:
+  - name: puzzle-api
+    newName: myregistry.azurecr.io/puzzle-api
+    newTag: v1.0.0

@@ -1,90 +1,326 @@
-# OAuth & SSO Implementation Primer
+# OAuth Implementation and SSO Integration Primer
+## Building Scalable Authentication for 100,000 Users with 2,000 Active
 
-## Complete Guide for Multi-Provider Authentication with Cost Optimization
+### Executive Summary
 
-### Table of Contents
-1. [Understanding OAuth 2.0 & OpenID Connect](#understanding-oauth-20--openid-connect)
-2. [Architecture Overview](#architecture-overview)
-3. [Basic Email/Password Authentication](#basic-emailpassword-authentication)
-4. [Implementing OAuth Providers](#implementing-oauth-providers)
-5. [SSO Integration](#sso-integration)
-6. [Account Linking & Migration](#account-linking--migration)
-7. [Cost Optimization Strategies](#cost-optimization-strategies)
-8. [Security Best Practices](#security-best-practices)
-9. [Implementation Roadmap](#implementation-roadmap)
-10. [Monitoring & Maintenance](#monitoring--maintenance)
+This primer covers implementing OAuth 2.0/OpenID Connect for your own authorization server while integrating with external providers (GitHub, Microsoft, Google, Apple, Meta) and maintaining cost-effective operations for a high-user, low-activity scenario.
 
-## Understanding OAuth 2.0 & OpenID Connect
+## Table of Contents
 
-### Core Concepts
-
-```yaml
-OAuth 2.0:
-  Purpose: Authorization (what you can access)
-  Grants:
-    - Authorization Code: Web apps
-    - Implicit: Deprecated
-    - Client Credentials: M2M
-    - Resource Owner Password: Legacy
-    - Device Code: Smart TVs, IoT
-    - PKCE: Mobile/SPA apps
-
-OpenID Connect (OIDC):
-  Purpose: Authentication (who you are)
-  Built on: OAuth 2.0
-  Additions:
-    - ID Token (JWT)
-    - UserInfo endpoint
-    - Discovery endpoint
-    - Dynamic registration
-```
-
-### Authentication Flow
-
-```
-┌─────────┐          ┌──────────┐         ┌──────────────┐
-│  User   │─────────▶│ Your App │────────▶│   Provider   │
-└─────────┘          └──────────┘         │  (Google,    │
-     ▲                     │               │  GitHub...)  │
-     │                     │               └──────────────┘
-     │                     ▼                       │
-     │            ┌───────────────┐               │
-     └────────────│ Authorization │◀──────────────┘
-                  │    Server      │
-                  └───────────────┘
-```
+1. [Architecture Overview](#architecture-overview)
+2. [Self-Hosted OAuth Server](#self-hosted-oauth-server)
+3. [External Provider Integration](#external-provider-integration)
+4. [Email/Password Authentication](#emailpassword-authentication)
+5. [SSO Implementation](#sso-implementation)
+6. [Cost Optimization Strategies](#cost-optimization-strategies)
+7. [Security Best Practices](#security-best-practices)
+8. [Implementation Guide](#implementation-guide)
+9. [Monitoring and Maintenance](#monitoring-and-maintenance)
+10. [Decision Framework](#decision-framework)
 
 ## Architecture Overview
 
-### Complete Authentication System
+### High-Level Design
 
+```mermaid
+graph TB
+    subgraph "Client Applications"
+        WEB[Web App]
+        MOB[Mobile App]
+        API[API Clients]
+    end
+    
+    subgraph "Your OAuth Server"
+        AUTH[Authorization Server]
+        IDP[Identity Provider]
+        USER[User Store]
+        TOKEN[Token Service]
+    end
+    
+    subgraph "External Providers"
+        GH[GitHub]
+        MS[Microsoft]
+        GOOG[Google]
+        FB[Meta/Facebook]
+        APPL[Apple]
+    end
+    
+    WEB --> AUTH
+    MOB --> AUTH
+    API --> AUTH
+    
+    AUTH --> IDP
+    IDP --> USER
+    IDP --> TOKEN
+    
+    IDP --> GH
+    IDP --> MS
+    IDP --> GOOG
+    IDP --> FB
+    IDP --> APPL
+```
+
+### Component Responsibilities
+
+```yaml
+Authorization Server:
+  - OAuth 2.0 flows (authorization code, PKCE)
+  - OpenID Connect implementation
+  - Token issuance and validation
+  - Client application management
+  
+Identity Provider:
+  - User authentication orchestration
+  - External provider integration
+  - Account linking
+  - MFA coordination
+  
+User Store:
+  - Profile management
+  - Credentials (for email/password)
+  - Linked accounts
+  - Permissions and roles
+  
+Token Service:
+  - JWT generation
+  - Refresh token management
+  - Token revocation
+  - Session management
+```
+
+## Self-Hosted OAuth Server
+
+### Technology Stack Options
+
+#### Option 1: IdentityServer (C#/.NET)
 ```csharp
-public class AuthenticationArchitecture
+// Program.cs
+builder.Services.AddIdentityServer(options =>
 {
-    // Core components needed
-    public interface IAuthenticationSystem
-    {
-        // Local authentication
-        Task<AuthResult> AuthenticateLocal(string email, string password);
-        Task<AuthResult> RegisterLocal(string email, string password);
+    options.Events.RaiseErrorEvents = true;
+    options.Events.RaiseInformationEvents = true;
+    options.Events.RaiseFailureEvents = true;
+    options.Events.RaiseSuccessEvents = true;
+})
+.AddInMemoryIdentityResources(Config.IdentityResources)
+.AddInMemoryApiScopes(Config.ApiScopes)
+.AddInMemoryClients(Config.Clients)
+.AddAspNetIdentity<ApplicationUser>()
+.AddDeveloperSigningCredential(); // Use proper certs in production
+
+// Config.cs
+public static class Config
+{
+    public static IEnumerable<IdentityResource> IdentityResources =>
+        new IdentityResource[]
+        {
+            new IdentityResources.OpenId(),
+            new IdentityResources.Profile(),
+            new IdentityResources.Email()
+        };
+
+    public static IEnumerable<ApiScope> ApiScopes =>
+        new ApiScope[]
+        {
+            new ApiScope("api", "My API"),
+            new ApiScope("api.read", "Read access to API"),
+            new ApiScope("api.write", "Write access to API")
+        };
+
+    public static IEnumerable<Client> Clients =>
+        new Client[]
+        {
+            // SPA with PKCE
+            new Client
+            {
+                ClientId = "spa",
+                ClientName = "Single Page Application",
+                AllowedGrantTypes = GrantTypes.Code,
+                RequireClientSecret = false,
+                RequirePkce = true,
+                
+                RedirectUris = { "https://app.example.com/callback" },
+                PostLogoutRedirectUris = { "https://app.example.com" },
+                AllowedCorsOrigins = { "https://app.example.com" },
+                
+                AllowedScopes = new List<string>
+                {
+                    IdentityServerConstants.StandardScopes.OpenId,
+                    IdentityServerConstants.StandardScopes.Profile,
+                    IdentityServerConstants.StandardScopes.Email,
+                    "api"
+                },
+                
+                AccessTokenLifetime = 3600, // 1 hour
+                RefreshTokenUsage = TokenUsage.ReUse,
+                RefreshTokenExpiration = TokenExpiration.Sliding,
+                SlidingRefreshTokenLifetime = 86400 // 24 hours
+            }
+        };
+}
+```
+
+#### Option 2: Keycloak (Java)
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${DB_PASSWORD}
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    command:
+      - start
+      - --auto-build
+      - --http-enabled=true
+      - --hostname-strict-https=false
+      - --hostname-strict=false
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+      
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - keycloak_data:/var/lib/postgresql/data
+      
+volumes:
+  keycloak_data:
+```
+
+#### Option 3: Custom Implementation (Node.js)
+```javascript
+// oauth-server.js
+const express = require('express');
+const { Issuer, generators } = require('openid-client');
+const jose = require('jose');
+
+class OAuthServer {
+  constructor(config) {
+    this.config = config;
+    this.clients = new Map();
+    this.codes = new Map();
+    this.tokens = new Map();
+    this.app = express();
+    this.setupRoutes();
+  }
+  
+  async generateKeyPair() {
+    const { publicKey, privateKey } = await jose.generateKeyPair('RS256');
+    this.publicKey = publicKey;
+    this.privateKey = privateKey;
+  }
+  
+  setupRoutes() {
+    // Authorization endpoint
+    this.app.get('/authorize', async (req, res) => {
+      const {
+        client_id,
+        redirect_uri,
+        response_type,
+        scope,
+        state,
+        code_challenge,
+        code_challenge_method
+      } = req.query;
+      
+      // Validate client and redirect_uri
+      const client = this.clients.get(client_id);
+      if (!client || !client.redirect_uris.includes(redirect_uri)) {
+        return res.status(400).json({ error: 'invalid_client' });
+      }
+      
+      // Generate authorization code
+      const code = generators.random();
+      this.codes.set(code, {
+        client_id,
+        redirect_uri,
+        scope,
+        code_challenge,
+        code_challenge_method,
+        expires_at: Date.now() + 600000 // 10 minutes
+      });
+      
+      // Redirect with code
+      const params = new URLSearchParams({
+        code,
+        state
+      });
+      res.redirect(`${redirect_uri}?${params}`);
+    });
+    
+    // Token endpoint
+    this.app.post('/token', async (req, res) => {
+      const {
+        grant_type,
+        code,
+        redirect_uri,
+        client_id,
+        code_verifier,
+        refresh_token
+      } = req.body;
+      
+      if (grant_type === 'authorization_code') {
+        // Validate code
+        const codeData = this.codes.get(code);
+        if (!codeData || codeData.expires_at < Date.now()) {
+          return res.status(400).json({ error: 'invalid_grant' });
+        }
         
-        // OAuth authentication
-        Task<AuthResult> AuthenticateOAuth(string provider, string code);
-        Task<IEnumerable<string>> GetConfiguredProviders();
+        // Validate PKCE
+        if (codeData.code_challenge) {
+          const challenge = generators.codeChallenge(code_verifier);
+          if (challenge !== codeData.code_challenge) {
+            return res.status(400).json({ error: 'invalid_grant' });
+          }
+        }
         
-        // SSO authentication
-        Task<AuthResult> AuthenticateSAML(string samlResponse);
-        Task<AuthResult> AuthenticateOIDC(string idToken);
+        // Generate tokens
+        const accessToken = await this.generateAccessToken(client_id, codeData.scope);
+        const refreshToken = generators.random();
+        const idToken = await this.generateIdToken(client_id);
         
-        // Account management
-        Task<LinkResult> LinkAccount(User user, string provider, string externalId);
-        Task<User> FindOrCreateUser(ExternalUserInfo info);
+        this.tokens.set(refreshToken, {
+          client_id,
+          scope: codeData.scope,
+          expires_at: Date.now() + 2592000000 // 30 days
+        });
         
-        // Token management
-        Task<TokenPair> GenerateTokens(User user);
-        Task<TokenPair> RefreshTokens(string refreshToken);
-        Task RevokeTokens(string userId);
-    }
+        res.json({
+          access_token: accessToken,
+          token_type: 'Bearer',
+          expires_in: 3600,
+          refresh_token: refreshToken,
+          id_token: idToken
+        });
+      }
+    });
+  }
+  
+  async generateAccessToken(clientId, scope) {
+    const jwt = await new jose.SignJWT({
+      iss: this.config.issuer,
+      sub: 'user123', // User ID
+      aud: clientId,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000),
+      scope: scope
+    })
+    .setProtectedHeader({ alg: 'RS256' })
+    .sign(this.privateKey);
+    
+    return jwt;
+  }
 }
 ```
 
@@ -92,1212 +328,1235 @@ public class AuthenticationArchitecture
 
 ```sql
 -- Users table
-CREATE TABLE Users (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    Email NVARCHAR(256) UNIQUE,
-    EmailConfirmed BIT DEFAULT 0,
-    PasswordHash NVARCHAR(MAX) NULL, -- NULL for OAuth-only users
-    Username NVARCHAR(256) UNIQUE,
-    TwoFactorEnabled BIT DEFAULT 0,
-    LockoutEnd DATETIMEOFFSET NULL,
-    LockoutEnabled BIT DEFAULT 1,
-    AccessFailedCount INT DEFAULT 0,
-    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    UpdatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    LastLoginAt DATETIME2 NULL,
-    IsActive BIT DEFAULT 1
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    email_verified BOOLEAN DEFAULT FALSE,
+    password_hash VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    mfa_enabled BOOLEAN DEFAULT FALSE,
+    mfa_secret VARCHAR(255)
 );
 
--- External logins
-CREATE TABLE UserLogins (
-    LoginProvider NVARCHAR(128),
-    ProviderKey NVARCHAR(128),
-    UserId UNIQUEIDENTIFIER,
-    ProviderDisplayName NVARCHAR(256),
-    PRIMARY KEY (LoginProvider, ProviderKey),
-    FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
+-- External provider accounts
+CREATE TABLE user_external_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL,
+    provider_user_id VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
+    display_name VARCHAR(255),
+    avatar_url TEXT,
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(provider, provider_user_id)
 );
 
--- User claims from providers
-CREATE TABLE UserClaims (
-    Id INT IDENTITY PRIMARY KEY,
-    UserId UNIQUEIDENTIFIER,
-    ClaimType NVARCHAR(256),
-    ClaimValue NVARCHAR(MAX),
-    FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
+-- OAuth clients
+CREATE TABLE oauth_clients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id VARCHAR(255) UNIQUE NOT NULL,
+    client_secret VARCHAR(255),
+    name VARCHAR(255) NOT NULL,
+    redirect_uris TEXT[] NOT NULL,
+    allowed_scopes TEXT[] NOT NULL,
+    allowed_grant_types TEXT[] NOT NULL,
+    access_token_lifetime INTEGER DEFAULT 3600,
+    refresh_token_lifetime INTEGER DEFAULT 2592000,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
 );
 
 -- Refresh tokens
-CREATE TABLE RefreshTokens (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    UserId UNIQUEIDENTIFIER,
-    Token NVARCHAR(88) UNIQUE,
-    ExpiresAt DATETIME2,
-    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    RevokedAt DATETIME2 NULL,
-    ReplacedByToken NVARCHAR(88) NULL,
-    FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
+CREATE TABLE refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    token_hash VARCHAR(255) UNIQUE NOT NULL,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    client_id VARCHAR(255) NOT NULL,
+    scope TEXT,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP
 );
 
--- Audit log
-CREATE TABLE AuthenticationLog (
-    Id BIGINT IDENTITY PRIMARY KEY,
-    UserId UNIQUEIDENTIFIER NULL,
-    Event NVARCHAR(50),
-    Provider NVARCHAR(50),
-    IpAddress NVARCHAR(45),
-    UserAgent NVARCHAR(512),
-    Success BIT,
-    FailureReason NVARCHAR(256) NULL,
-    Timestamp DATETIME2 DEFAULT GETUTCDATE()
+-- User sessions (for SSO)
+CREATE TABLE user_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    session_token VARCHAR(255) UNIQUE NOT NULL,
+    ip_address INET,
+    user_agent TEXT,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-## Basic Email/Password Authentication
+## External Provider Integration
 
-### Implementation with ASP.NET Core Identity
+### Provider Configuration
 
-```csharp
-// Program.cs configuration
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
-
-builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
-{
-    // Password settings
-    options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 8;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequiredUniqueChars = 6;
-    
-    // Lockout settings
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.AllowedForNewUsers = true;
-    
-    // User settings
-    options.User.RequireUniqueEmail = true;
-    options.User.AllowedUserNameCharacters = 
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
-})
-.AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
-
-// Custom password hasher for better security
-public class ArgonPasswordHasher<TUser> : IPasswordHasher<TUser> 
-    where TUser : class
-{
-    public string HashPassword(TUser user, string password)
-    {
-        // Use Argon2id for password hashing
-        var salt = new byte[16];
-        RandomNumberGenerator.Fill(salt);
-        
-        var argon2 = new Argon2id(Encoding.UTF8.GetBytes(password))
-        {
-            Salt = salt,
-            DegreeOfParallelism = 8,
-            Iterations = 4,
-            MemorySize = 1024 * 128 // 128 MB
-        };
-        
-        return Convert.ToBase64String(argon2.GetBytes(32));
+```javascript
+// providers.config.js
+module.exports = {
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    authorizationUrl: 'https://github.com/login/oauth/authorize',
+    tokenUrl: 'https://github.com/login/oauth/access_token',
+    userInfoUrl: 'https://api.github.com/user',
+    scope: 'read:user user:email',
+    userMapping: {
+      id: 'id',
+      email: 'email',
+      name: 'name',
+      avatar: 'avatar_url'
     }
-}
+  },
+  
+  microsoft: {
+    clientId: process.env.MICROSOFT_CLIENT_ID,
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+    authorizationUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+    userInfoUrl: 'https://graph.microsoft.com/v1.0/me',
+    scope: 'openid profile email',
+    userMapping: {
+      id: 'id',
+      email: 'mail',
+      name: 'displayName',
+      avatar: null
+    }
+  },
+  
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    userInfoUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
+    scope: 'openid profile email',
+    userMapping: {
+      id: 'id',
+      email: 'email',
+      name: 'name',
+      avatar: 'picture'
+    }
+  },
+  
+  apple: {
+    clientId: process.env.APPLE_CLIENT_ID,
+    teamId: process.env.APPLE_TEAM_ID,
+    keyId: process.env.APPLE_KEY_ID,
+    privateKey: process.env.APPLE_PRIVATE_KEY,
+    authorizationUrl: 'https://appleid.apple.com/auth/authorize',
+    tokenUrl: 'https://appleid.apple.com/auth/token',
+    scope: 'name email',
+    responseMode: 'form_post'
+  },
+  
+  facebook: {
+    clientId: process.env.FACEBOOK_CLIENT_ID,
+    clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+    authorizationUrl: 'https://www.facebook.com/v12.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v12.0/oauth/access_token',
+    userInfoUrl: 'https://graph.facebook.com/me?fields=id,name,email,picture',
+    scope: 'email public_profile',
+    userMapping: {
+      id: 'id',
+      email: 'email',
+      name: 'name',
+      avatar: 'picture.data.url'
+    }
+  }
+};
 ```
 
-### Registration and Login Endpoints
+### Universal Provider Handler
 
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class AuthController : ControllerBase
-{
-    [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterDto model)
-    {
-        var user = new ApplicationUser
-        {
-            UserName = model.Email,
-            Email = model.Email,
-            EmailConfirmed = false
-        };
-        
-        var result = await _userManager.CreateAsync(user, model.Password);
-        
-        if (result.Succeeded)
-        {
-            // Send confirmation email
-            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            await _emailService.SendConfirmationEmail(user.Email, code);
-            
-            // Log registration
-            await _authLogger.LogRegistration(user.Id, HttpContext);
-            
-            return Ok(new { message = "Registration successful. Please check your email." });
-        }
-        
-        return BadRequest(result.Errors);
+```javascript
+// external-auth.service.js
+class ExternalAuthService {
+  constructor(providers) {
+    this.providers = providers;
+  }
+  
+  async handleCallback(provider, code, state) {
+    const config = this.providers[provider];
+    if (!config) {
+      throw new Error('Unknown provider');
     }
     
-    [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginDto model)
-    {
-        var user = await _userManager.FindByEmailAsync(model.Email);
-        if (user == null)
-        {
-            await _authLogger.LogFailedLogin(model.Email, "User not found", HttpContext);
-            return Unauthorized("Invalid credentials");
-        }
-        
-        if (!user.EmailConfirmed)
-        {
-            return Unauthorized("Please confirm your email first");
-        }
-        
-        var result = await _signInManager.CheckPasswordSignInAsync(
-            user, 
-            model.Password, 
-            lockoutOnFailure: true);
-            
-        if (result.Succeeded)
-        {
-            var tokens = await GenerateTokens(user);
-            await _authLogger.LogSuccessfulLogin(user.Id, "Local", HttpContext);
-            
-            return Ok(tokens);
-        }
-        
-        if (result.IsLockedOut)
-        {
-            return Unauthorized("Account locked. Try again later.");
-        }
-        
-        return Unauthorized("Invalid credentials");
-    }
-}
-```
-
-## Implementing OAuth Providers
-
-### Multi-Provider Configuration
-
-```csharp
-// Program.cs - Configure all providers
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-})
-.AddCookie(options =>
-{
-    options.LoginPath = "/auth/login";
-    options.LogoutPath = "/auth/logout";
-})
-.AddGoogle(options =>
-{
-    options.ClientId = configuration["OAuth:Google:ClientId"];
-    options.ClientSecret = configuration["OAuth:Google:ClientSecret"];
-    options.CallbackPath = "/auth/signin-google";
-    options.Scope.Add("email");
-    options.Scope.Add("profile");
-    options.SaveTokens = true;
-})
-.AddMicrosoftAccount(options =>
-{
-    options.ClientId = configuration["OAuth:Microsoft:ClientId"];
-    options.ClientSecret = configuration["OAuth:Microsoft:ClientSecret"];
-    options.CallbackPath = "/auth/signin-microsoft";
-    options.SaveTokens = true;
-})
-.AddGitHub(options =>
-{
-    options.ClientId = configuration["OAuth:GitHub:ClientId"];
-    options.ClientSecret = configuration["OAuth:GitHub:ClientSecret"];
-    options.CallbackPath = "/auth/signin-github";
-    options.Scope.Add("user:email");
-    options.SaveTokens = true;
-})
-.AddApple(options =>
-{
-    options.ClientId = configuration["OAuth:Apple:ClientId"];
-    options.TeamId = configuration["OAuth:Apple:TeamId"];
-    options.KeyId = configuration["OAuth:Apple:KeyId"];
-    options.PrivateKey = async (keyId) =>
-    {
-        // Load Apple private key from secure storage
-        return await _keyVault.GetApplePrivateKey(keyId);
-    };
-    options.SaveTokens = true;
-})
-.AddFacebook(options =>
-{
-    options.AppId = configuration["OAuth:Facebook:AppId"];
-    options.AppSecret = configuration["OAuth:Facebook:AppSecret"];
-    options.CallbackPath = "/auth/signin-facebook";
-    options.Fields.Add("email");
-    options.Fields.Add("name");
-    options.SaveTokens = true;
-});
-```
-
-### OAuth Callback Handler
-
-```csharp
-public class OAuthController : Controller
-{
-    [HttpGet("signin/{provider}")]
-    public IActionResult SignIn(string provider, string returnUrl = "/")
-    {
-        var properties = new AuthenticationProperties
-        {
-            RedirectUri = Url.Action(nameof(SignInCallback), new { returnUrl }),
-            Items = { ["scheme"] = provider }
-        };
-        
-        return Challenge(properties, provider);
-    }
+    // Exchange code for token
+    const tokenResponse = await this.exchangeCodeForToken(provider, code);
     
-    [HttpGet("signin-callback")]
-    public async Task<IActionResult> SignInCallback(string returnUrl = "/")
-    {
-        var result = await HttpContext.AuthenticateAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme);
-            
-        if (!result.Succeeded)
-        {
-            return RedirectToAction("Login", "Auth", 
-                new { error = "external_login_failure" });
-        }
-        
-        var externalUser = result.Principal;
-        var provider = result.Properties.Items["scheme"];
-        var providerKey = externalUser.FindFirstValue(ClaimTypes.NameIdentifier);
-        
-        // Find or create user
-        var user = await _authService.FindOrCreateUser(new ExternalUserInfo
-        {
-            Provider = provider,
-            ProviderKey = providerKey,
-            Email = externalUser.FindFirstValue(ClaimTypes.Email),
-            Name = externalUser.FindFirstValue(ClaimTypes.Name),
-            Claims = externalUser.Claims
-        });
-        
-        // Generate our own tokens
-        var tokens = await GenerateTokens(user);
-        
-        // Redirect with tokens (or set cookies)
-        return Redirect($"{returnUrl}?token={tokens.AccessToken}");
-    }
-}
-```
-
-### Provider-Specific Handling
-
-```csharp
-public class ProviderSpecificHandlers
-{
-    // Apple requires special handling
-    public class AppleAuthHandler
-    {
-        public async Task<AppleTokenResponse> ValidateToken(string idToken)
-        {
-            // Apple uses JWT for ID tokens
-            var handler = new JwtSecurityTokenHandler();
-            var token = handler.ReadJwtToken(idToken);
-            
-            // Validate against Apple's public keys
-            var keys = await GetApplePublicKeys();
-            var validationParameters = new TokenValidationParameters
-            {
-                ValidIssuer = "https://appleid.apple.com",
-                ValidAudience = _configuration["OAuth:Apple:ClientId"],
-                IssuerSigningKeys = keys
-            };
-            
-            var principal = handler.ValidateToken(
-                idToken, 
-                validationParameters, 
-                out _);
-                
-            return new AppleTokenResponse
-            {
-                Sub = principal.FindFirst("sub")?.Value,
-                Email = principal.FindFirst("email")?.Value,
-                EmailVerified = bool.Parse(
-                    principal.FindFirst("email_verified")?.Value ?? "false")
-            };
-        }
-    }
+    // Get user info
+    const userInfo = await this.getUserInfo(provider, tokenResponse.access_token);
     
-    // GitHub doesn't return email in token
-    public class GitHubAuthHandler
-    {
-        public async Task<string> GetPrimaryEmail(string accessToken)
-        {
-            var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization = 
-                new AuthenticationHeaderValue("Bearer", accessToken);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("YourApp/1.0");
-            
-            var response = await client.GetAsync(
-                "https://api.github.com/user/emails");
-            var emails = await response.Content
-                .ReadFromJsonAsync<List<GitHubEmail>>();
-                
-            return emails?.FirstOrDefault(e => e.Primary && e.Verified)?.Email;
-        }
-    }
-}
-```
-
-## SSO Integration
-
-### SAML 2.0 Implementation
-
-```csharp
-// Using Sustainsys.Saml2
-builder.Services.AddAuthentication()
-    .AddSaml2(options =>
-    {
-        options.SPOptions.EntityId = new EntityId("https://yourapp.com/saml");
-        options.SPOptions.ReturnUrl = new Uri("https://yourapp.com/saml/acs");
-        
-        // Add identity providers
-        options.IdentityProviders.Add(
-            new IdentityProvider(
-                new EntityId("https://idp.company.com"), 
-                options.SPOptions)
-            {
-                MetadataLocation = "https://idp.company.com/metadata",
-                LoadMetadata = true
-            });
+    // Map to standard format
+    const mappedUser = this.mapUserInfo(provider, userInfo);
+    
+    // Find or create user
+    const user = await this.findOrCreateUser(provider, mappedUser, tokenResponse);
+    
+    return user;
+  }
+  
+  async exchangeCodeForToken(provider, code) {
+    const config = this.providers[provider];
+    
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: `${process.env.BASE_URL}/auth/${provider}/callback`,
+      client_id: config.clientId,
+      client_secret: config.clientSecret
     });
-
-// SAML Controller
-[Route("saml")]
-public class SamlController : Controller
-{
-    [HttpGet("login")]
-    public IActionResult Login(string company)
-    {
-        var properties = new AuthenticationProperties
-        {
-            RedirectUri = "/saml/callback",
-            Items = { ["company"] = company }
-        };
-        
-        return Challenge(properties, "Saml2");
+    
+    // Special handling for Apple
+    if (provider === 'apple') {
+      params.set('client_secret', await this.generateAppleClientSecret());
     }
     
-    [HttpPost("acs")]
-    public async Task<IActionResult> AssertionConsumerService()
-    {
-        var result = await HttpContext.AuthenticateAsync("Saml2");
-        
-        if (result.Succeeded)
-        {
-            var user = await FindOrCreateSamlUser(result.Principal);
-            var tokens = await GenerateTokens(user);
-            
-            return Redirect($"/app?token={tokens.AccessToken}");
-        }
-        
-        return Redirect("/login?error=saml_failed");
+    const response = await fetch(config.tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      },
+      body: params.toString()
+    });
+    
+    return response.json();
+  }
+  
+  async getUserInfo(provider, accessToken) {
+    const config = this.providers[provider];
+    
+    // Apple uses ID token for user info
+    if (provider === 'apple') {
+      return this.decodeAppleIdToken(accessToken);
     }
+    
+    const response = await fetch(config.userInfoUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+    
+    return response.json();
+  }
+  
+  async findOrCreateUser(provider, providerUser, tokens) {
+    // Check if external account exists
+    let externalAccount = await db.userExternalAccounts.findOne({
+      provider,
+      provider_user_id: providerUser.id
+    });
+    
+    if (externalAccount) {
+      // Update tokens
+      await db.userExternalAccounts.update(externalAccount.id, {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_expires_at: new Date(Date.now() + tokens.expires_in * 1000)
+      });
+      
+      return db.users.findById(externalAccount.user_id);
+    }
+    
+    // Check if user with email exists
+    let user = await db.users.findByEmail(providerUser.email);
+    
+    if (!user) {
+      // Create new user
+      user = await db.users.create({
+        email: providerUser.email,
+        email_verified: true,
+        is_active: true
+      });
+    }
+    
+    // Link external account
+    await db.userExternalAccounts.create({
+      user_id: user.id,
+      provider,
+      provider_user_id: providerUser.id,
+      email: providerUser.email,
+      display_name: providerUser.name,
+      avatar_url: providerUser.avatar,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_expires_at: new Date(Date.now() + tokens.expires_in * 1000)
+    });
+    
+    return user;
+  }
 }
 ```
 
-### Enterprise SSO with OIDC
+## Email/Password Authentication
 
-```csharp
-public class EnterpriseSSOService
-{
-    public void ConfigureEnterpriseSSO(
-        IServiceCollection services, 
-        IConfiguration configuration)
-    {
-        // Dynamic provider registration
-        var providers = configuration
-            .GetSection("SSO:Providers")
-            .Get<List<SSOProvider>>();
-            
-        foreach (var provider in providers)
-        {
-            services.AddAuthentication()
-                .AddOpenIdConnect(provider.Name, options =>
-                {
-                    options.Authority = provider.Authority;
-                    options.ClientId = provider.ClientId;
-                    options.ClientSecret = provider.ClientSecret;
-                    options.ResponseType = "code";
-                    options.SaveTokens = true;
-                    options.GetClaimsFromUserInfoEndpoint = true;
-                    options.CallbackPath = $"/auth/callback/{provider.Name}";
-                    
-                    // Map claims
-                    options.ClaimActions.MapJsonKey(
-                        ClaimTypes.Email, 
-                        provider.EmailClaim ?? "email");
-                    options.ClaimActions.MapJsonKey(
-                        ClaimTypes.Name, 
-                        provider.NameClaim ?? "name");
-                        
-                    // Custom scopes
-                    foreach (var scope in provider.Scopes)
-                    {
-                        options.Scope.Add(scope);
-                    }
-                });
-        }
+### Secure Implementation
+
+```javascript
+// auth.service.js
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const speakeasy = require('speakeasy');
+
+class AuthService {
+  async register(email, password) {
+    // Validate email
+    if (!this.isValidEmail(email)) {
+      throw new Error('Invalid email format');
     }
+    
+    // Check password strength
+    const passwordStrength = this.checkPasswordStrength(password);
+    if (passwordStrength.score < 3) {
+      throw new Error('Password too weak: ' + passwordStrength.feedback);
+    }
+    
+    // Check if user exists
+    const existingUser = await db.users.findByEmail(email);
+    if (existingUser) {
+      // Don't reveal that user exists
+      throw new Error('Registration failed');
+    }
+    
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 12);
+    
+    // Create user
+    const user = await db.users.create({
+      email,
+      password_hash: passwordHash,
+      email_verified: false
+    });
+    
+    // Send verification email
+    await this.sendVerificationEmail(user);
+    
+    return user;
+  }
+  
+  async login(email, password, mfaToken = null) {
+    const user = await db.users.findByEmail(email);
+    
+    if (!user || !user.password_hash) {
+      // Constant time comparison to prevent timing attacks
+      await bcrypt.compare(password, '$2b$12$dummy.hash.to.prevent.timing');
+      throw new Error('Invalid credentials');
+    }
+    
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      await this.recordFailedLogin(user.id);
+      throw new Error('Invalid credentials');
+    }
+    
+    // Check MFA if enabled
+    if (user.mfa_enabled) {
+      if (!mfaToken) {
+        return { requiresMfa: true, userId: user.id };
+      }
+      
+      const isValidMfa = speakeasy.totp.verify({
+        secret: user.mfa_secret,
+        encoding: 'base32',
+        token: mfaToken,
+        window: 2
+      });
+      
+      if (!isValidMfa) {
+        throw new Error('Invalid MFA token');
+      }
+    }
+    
+    // Update last login
+    await db.users.update(user.id, {
+      last_login_at: new Date()
+    });
+    
+    // Create session
+    const session = await this.createSession(user.id);
+    
+    return { user, session };
+  }
+  
+  checkPasswordStrength(password) {
+    const result = {
+      score: 0,
+      feedback: []
+    };
+    
+    // Length check
+    if (password.length >= 12) result.score++;
+    else if (password.length >= 8) result.score += 0.5;
+    else result.feedback.push('Use at least 8 characters');
+    
+    // Complexity checks
+    if (/[a-z]/.test(password)) result.score += 0.5;
+    if (/[A-Z]/.test(password)) result.score += 0.5;
+    if (/[0-9]/.test(password)) result.score += 0.5;
+    if (/[^a-zA-Z0-9]/.test(password)) result.score += 0.5;
+    
+    // Common password check
+    if (this.isCommonPassword(password)) {
+      result.score = 0;
+      result.feedback.push('This password is too common');
+    }
+    
+    // Provide feedback
+    if (result.score < 3) {
+      if (!/[A-Z]/.test(password)) result.feedback.push('Add uppercase letters');
+      if (!/[0-9]/.test(password)) result.feedback.push('Add numbers');
+      if (!/[^a-zA-Z0-9]/.test(password)) result.feedback.push('Add special characters');
+    }
+    
+    return result;
+  }
+  
+  async sendVerificationEmail(user) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    await db.emailVerifications.create({
+      user_id: user.id,
+      token,
+      expires_at: expires
+    });
+    
+    await emailService.send({
+      to: user.email,
+      subject: 'Verify your email',
+      template: 'email-verification',
+      data: {
+        verificationUrl: `${process.env.BASE_URL}/verify-email?token=${token}`
+      }
+    });
+  }
 }
 ```
 
-## Account Linking & Migration
+### Password Reset Flow
 
-### Account Linking Strategy
+```javascript
+// password-reset.service.js
+class PasswordResetService {
+  async requestReset(email) {
+    const user = await db.users.findByEmail(email);
+    
+    // Don't reveal if user exists
+    if (!user) {
+      return { message: 'If an account exists, a reset email has been sent' };
+    }
+    
+    // Rate limiting
+    const recentRequests = await db.passwordResets.countRecent(user.id, '1 hour');
+    if (recentRequests >= 3) {
+      return { message: 'If an account exists, a reset email has been sent' };
+    }
+    
+    // Generate token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    
+    await db.passwordResets.create({
+      user_id: user.id,
+      token_hash: crypto.createHash('sha256').update(token).digest('hex'),
+      expires_at: expires,
+      ip_address: req.ip
+    });
+    
+    // Send email
+    await emailService.send({
+      to: user.email,
+      subject: 'Password Reset Request',
+      template: 'password-reset',
+      data: {
+        resetUrl: `${process.env.BASE_URL}/reset-password?token=${token}`,
+        expiryTime: '1 hour'
+      }
+    });
+    
+    return { message: 'If an account exists, a reset email has been sent' };
+  }
+  
+  async resetPassword(token, newPassword) {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    
+    const resetRequest = await db.passwordResets.findValidByToken(tokenHash);
+    if (!resetRequest) {
+      throw new Error('Invalid or expired reset token');
+    }
+    
+    // Validate new password
+    const passwordStrength = authService.checkPasswordStrength(newPassword);
+    if (passwordStrength.score < 3) {
+      throw new Error('Password too weak: ' + passwordStrength.feedback);
+    }
+    
+    // Update password
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await db.users.update(resetRequest.user_id, {
+      password_hash: passwordHash,
+      updated_at: new Date()
+    });
+    
+    // Invalidate all password reset tokens for this user
+    await db.passwordResets.invalidateAllForUser(resetRequest.user_id);
+    
+    // Invalidate all sessions (force re-login)
+    await db.userSessions.invalidateAllForUser(resetRequest.user_id);
+    
+    // Send confirmation email
+    const user = await db.users.findById(resetRequest.user_id);
+    await emailService.send({
+      to: user.email,
+      subject: 'Password Changed',
+      template: 'password-changed',
+      data: {
+        changedAt: new Date().toISOString(),
+        ipAddress: req.ip
+      }
+    });
+  }
+}
+```
 
-```csharp
-public class AccountLinkingService
-{
-    public async Task<LinkResult> LinkAccounts(
-        User existingUser, 
-        ExternalLoginInfo newLogin)
-    {
-        // Check if already linked
-        var existingLink = await _context.UserLogins
-            .FirstOrDefaultAsync(l => 
-                l.LoginProvider == newLogin.LoginProvider &&
-                l.ProviderKey == newLogin.ProviderKey);
-                
-        if (existingLink != null)
-        {
-            if (existingLink.UserId == existingUser.Id)
-            {
-                return LinkResult.AlreadyLinked();
-            }
-            
-            return LinkResult.LinkedToAnotherAccount();
-        }
+## SSO Implementation
+
+### SAML 2.0 Integration
+
+```javascript
+// saml.service.js
+const saml2 = require('saml2-js');
+
+class SamlService {
+  constructor() {
+    this.serviceProvider = saml2.ServiceProvider({
+      entity_id: `${process.env.BASE_URL}/saml/metadata`,
+      private_key: process.env.SAML_PRIVATE_KEY,
+      certificate: process.env.SAML_CERTIFICATE,
+      assert_endpoint: `${process.env.BASE_URL}/saml/assert`,
+      allow_unencrypted_assertion: false
+    });
+  }
+  
+  async createLoginRequest(identityProvider) {
+    const idp = await this.getIdentityProvider(identityProvider);
+    
+    return new Promise((resolve, reject) => {
+      this.serviceProvider.create_login_request_url(idp, {}, (err, loginUrl, requestId) => {
+        if (err) return reject(err);
         
-        // Check email match for auto-linking
-        var email = newLogin.Principal.FindFirstValue(ClaimTypes.Email);
-        if (existingUser.Email != email)
-        {
-            return LinkResult.EmailMismatch();
-        }
-        
-        // Create link
-        _context.UserLogins.Add(new UserLogin
-        {
-            UserId = existingUser.Id,
-            LoginProvider = newLogin.LoginProvider,
-            ProviderKey = newLogin.ProviderKey,
-            ProviderDisplayName = newLogin.ProviderDisplayName
+        // Store request for validation
+        db.samlRequests.create({
+          request_id: requestId,
+          idp_id: identityProvider,
+          expires_at: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
         });
         
-        // Copy claims
-        var claims = newLogin.Principal.Claims
-            .Where(c => !await UserHasClaim(existingUser.Id, c))
-            .Select(c => new UserClaim
-            {
-                UserId = existingUser.Id,
-                ClaimType = c.Type,
-                ClaimValue = c.Value
-            });
-            
-        _context.UserClaims.AddRange(claims);
-        await _context.SaveChangesAsync();
+        resolve({ loginUrl, requestId });
+      });
+    });
+  }
+  
+  async handleAssertion(samlResponse, identityProvider) {
+    const idp = await this.getIdentityProvider(identityProvider);
+    
+    return new Promise((resolve, reject) => {
+      this.serviceProvider.post_assert(idp, {
+        request_body: { SAMLResponse: samlResponse }
+      }, async (err, samlUser) => {
+        if (err) return reject(err);
         
-        return LinkResult.Success();
-    }
+        // Map SAML attributes to user
+        const user = await this.findOrCreateUserFromSaml(samlUser, identityProvider);
+        
+        resolve(user);
+      });
+    });
+  }
+  
+  async getIdentityProvider(idpId) {
+    const config = await db.identityProviders.findById(idpId);
+    
+    return saml2.IdentityProvider({
+      sso_login_url: config.sso_login_url,
+      sso_logout_url: config.sso_logout_url,
+      certificates: [config.certificate],
+      force_authn: false,
+      sign_get_request: true,
+      allow_unencrypted_assertion: false
+    });
+  }
 }
 ```
 
-### Migration from Legacy System
+### Multi-Tenant SSO
 
-```csharp
-public class LegacyUserMigration
-{
-    public async Task<MigrationResult> MigrateLegacyUser(
-        string email, 
-        string legacyPassword)
-    {
-        // Check legacy system
-        var legacyUser = await _legacyDb.GetUser(email);
-        if (legacyUser == null)
-        {
-            return MigrationResult.NotFound();
-        }
-        
-        // Verify legacy password
-        if (!VerifyLegacyPassword(legacyPassword, legacyUser.PasswordHash))
-        {
-            return MigrationResult.InvalidPassword();
-        }
-        
-        // Create new user
-        var newUser = new ApplicationUser
-        {
-            Email = email,
-            UserName = email,
-            EmailConfirmed = legacyUser.EmailVerified,
-            LegacyUserId = legacyUser.Id
-        };
-        
-        // Create with new secure password
-        var result = await _userManager.CreateAsync(newUser, legacyPassword);
-        if (!result.Succeeded)
-        {
-            return MigrationResult.Failed(result.Errors);
-        }
-        
-        // Migrate additional data
-        await MigrateUserData(legacyUser.Id, newUser.Id);
-        
-        // Mark as migrated
-        await _legacyDb.MarkAsMigrated(legacyUser.Id);
-        
-        return MigrationResult.Success(newUser);
+```javascript
+// tenant-sso.service.js
+class TenantSSOService {
+  async configureTenant(tenantId, ssoConfig) {
+    const tenant = await db.tenants.findById(tenantId);
+    if (!tenant) throw new Error('Tenant not found');
+    
+    // Validate SSO configuration
+    if (ssoConfig.type === 'saml') {
+      await this.validateSamlConfig(ssoConfig);
+    } else if (ssoConfig.type === 'oidc') {
+      await this.validateOidcConfig(ssoConfig);
     }
+    
+    // Store encrypted configuration
+    const encryptedConfig = await this.encryptConfig(ssoConfig);
+    
+    await db.tenantSsoConfigs.upsert({
+      tenant_id: tenantId,
+      sso_type: ssoConfig.type,
+      config: encryptedConfig,
+      is_active: true,
+      updated_at: new Date()
+    });
+    
+    return { success: true };
+  }
+  
+  async handleSsoLogin(email) {
+    // Extract domain from email
+    const domain = email.split('@')[1];
+    
+    // Find tenant by domain
+    const tenant = await db.tenants.findByDomain(domain);
+    if (!tenant || !tenant.sso_enabled) {
+      return null; // Fall back to regular login
+    }
+    
+    // Get SSO configuration
+    const ssoConfig = await db.tenantSsoConfigs.findByTenantId(tenant.id);
+    if (!ssoConfig || !ssoConfig.is_active) {
+      return null;
+    }
+    
+    const config = await this.decryptConfig(ssoConfig.config);
+    
+    // Redirect to appropriate SSO provider
+    if (ssoConfig.sso_type === 'saml') {
+      return this.samlService.createLoginRequest(config);
+    } else if (ssoConfig.sso_type === 'oidc') {
+      return this.oidcService.createAuthorizationUrl(config);
+    }
+  }
 }
 ```
 
 ## Cost Optimization Strategies
 
-### Scenario: 100,000 Potential Users, 2,000 Active
+### Architecture for 100k Users, 2k Active
 
 ```yaml
-Challenge:
-  Total Users: 100,000
-  Active Users: 2,000 annually
-  Usage Pattern: Sporadic, seasonal
-  Budget: Minimal
-  
-Strategy:
-  Architecture: Hybrid approach
-  Primary: Self-hosted for active users
-  Fallback: JIT provisioning for dormant users
-  Cost Model: Pay only for active usage
+User Distribution:
+  Total Registered: 100,000
+  Monthly Active: 2,000 (2%)
+  Daily Active: 200 (0.2%)
+  Concurrent: 20-50
+
+Cost Optimization Strategies:
+  1. Serverless Architecture:
+     - AWS Lambda for auth endpoints
+     - API Gateway for routing
+     - DynamoDB for session storage
+     - RDS Aurora Serverless for user data
+     
+  2. Caching Strategy:
+     - CloudFront for static assets
+     - ElastiCache for hot data
+     - 24-hour session caching
+     
+  3. Database Optimization:
+     - Read replicas for queries
+     - Connection pooling
+     - Prepared statements
+     
+  4. Token Strategy:
+     - Long-lived refresh tokens (30 days)
+     - Short access tokens (1 hour)
+     - JWT to reduce database lookups
 ```
 
-### Implementation Strategy
+### Cost-Effective Infrastructure
 
-```csharp
-public class CostOptimizedAuthService
-{
-    // Tiered user storage
-    public class UserStorageStrategy
-    {
-        // Active users in primary database
-        private readonly ApplicationDbContext _activeDb;
-        
-        // Dormant users in cheaper storage
-        private readonly ITableStorage _dormantStorage;
-        
-        // Redis cache for hot users
-        private readonly IDistributedCache _cache;
-        
-        public async Task<User> GetUser(string email)
-        {
-            // Check cache first (1ms)
-            var cached = await _cache.GetAsync<User>($"user:{email}");
-            if (cached != null) return cached;
-            
-            // Check active database (10ms)
-            var activeUser = await _activeDb.Users
-                .FirstOrDefaultAsync(u => u.Email == email);
-            if (activeUser != null)
-            {
-                await _cache.SetAsync($"user:{email}", activeUser, 
-                    TimeSpan.FromHours(1));
-                return activeUser;
-            }
-            
-            // Check dormant storage (100ms)
-            var dormantUser = await _dormantStorage
-                .GetEntityAsync<DormantUser>("users", email);
-            if (dormantUser != null)
-            {
-                // Reactivate user
-                return await ReactivateUser(dormantUser);
-            }
-            
-            return null;
-        }
-        
-        public async Task<User> ReactivateUser(DormantUser dormant)
-        {
-            // Move to active database
-            var user = new User
-            {
-                Email = dormant.Email,
-                PasswordHash = dormant.PasswordHash,
-                CreatedAt = dormant.CreatedAt,
-                LastLoginAt = DateTime.UtcNow
-            };
-            
-            _activeDb.Users.Add(user);
-            await _activeDb.SaveChangesAsync();
-            
-            // Remove from dormant storage
-            await _dormantStorage.DeleteEntityAsync("users", dormant.Email);
-            
-            // Cache for immediate use
-            await _cache.SetAsync($"user:{email}", user, 
-                TimeSpan.FromHours(1));
-                
-            return user;
-        }
-    }
-    
-    // Archive inactive users
-    public class UserArchivalService : BackgroundService
-    {
-        protected override async Task ExecuteAsync(CancellationToken ct)
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                // Run daily at 2 AM
-                var now = DateTime.Now;
-                var scheduledTime = now.Date.AddDays(1).AddHours(2);
-                var delay = scheduledTime - now;
-                
-                await Task.Delay(delay, ct);
-                
-                // Archive users inactive for 90 days
-                var cutoffDate = DateTime.UtcNow.AddDays(-90);
-                var inactiveUsers = await _activeDb.Users
-                    .Where(u => u.LastLoginAt < cutoffDate)
-                    .Take(1000) // Batch process
-                    .ToListAsync(ct);
-                    
-                foreach (var user in inactiveUsers)
-                {
-                    await ArchiveUser(user);
-                }
-            }
-        }
-    }
-}
-```
+```javascript
+// serverless.yml
+service: auth-service
 
-### Cost-Effective Token Strategy
+provider:
+  name: aws
+  runtime: nodejs18.x
+  environment:
+    USER_TABLE: ${self:service}-users-${opt:stage}
+    SESSION_TABLE: ${self:service}-sessions-${opt:stage}
 
-```csharp
-public class EconomicalTokenService
-{
-    // Use stateless JWTs to avoid database lookups
-    public class StatelessJwtService
-    {
-        public string GenerateAccessToken(User user)
-        {
-            var claims = new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim("active", "true") // Mark as active user
-            };
-            
-            var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-            var creds = new SigningCredentials(
-                key, 
-                SecurityAlgorithms.HmacSha256);
-                
-            var token = new JwtSecurityToken(
-                issuer: _configuration["Jwt:Issuer"],
-                audience: _configuration["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddHours(1), // Short-lived
-                signingCredentials: creds);
-                
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-        
-        // Use Redis for refresh tokens (only for active users)
-        public async Task<string> GenerateRefreshToken(string userId)
-        {
-            var token = GenerateSecureToken();
-            
-            await _redis.StringSetAsync(
-                $"refresh:{token}",
-                userId,
-                TimeSpan.FromDays(30));
-                
-            return token;
-        }
-    }
-}
-```
-
-### Infrastructure Cost Optimization
-
-```yaml
-# Docker Compose for self-hosted auth
-version: '3.8'
-
-services:
-  auth-api:
-    build: .
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - Database__Provider=PostgreSQL # Cheaper than SQL Server
-    deploy:
-      resources:
-        limits:
-          memory: 512M # Minimal memory
-          cpus: '0.5'
-    
-  postgres:
-    image: postgres:alpine # Smaller image
-    environment:
-      - POSTGRES_DB=auth
-      - POSTGRES_USER=auth
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    deploy:
-      resources:
-        limits:
-          memory: 256M
+functions:
+  authorize:
+    handler: handlers/auth.authorize
+    events:
+      - http:
+          path: /authorize
+          method: GET
           
-  redis:
-    image: redis:alpine
-    command: >
-      redis-server
-      --maxmemory 128mb
-      --maxmemory-policy allkeys-lru
-    deploy:
-      resources:
-        limits:
-          memory: 128M
+  token:
+    handler: handlers/auth.token
+    events:
+      - http:
+          path: /token
+          method: POST
           
-  # Use Nginx for SSL termination and caching
-  nginx:
-    image: nginx:alpine
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
-    ports:
-      - "443:443"
-    deploy:
-      resources:
-        limits:
-          memory: 64M
+  userinfo:
+    handler: handlers/auth.userinfo
+    events:
+      - http:
+          path: /userinfo
+          method: GET
+          authorizer:
+            name: jwtAuthorizer
+            
+  jwtAuthorizer:
+    handler: handlers/auth.jwtAuthorizer
+
+resources:
+  Resources:
+    UserTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.USER_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+              
+    SessionCache:
+      Type: AWS::ElastiCache::CacheCluster
+      Properties:
+        CacheNodeType: cache.t3.micro
+        Engine: redis
+        NumCacheNodes: 1
 ```
 
-### Provider Cost Comparison
+### Cost Monitoring
 
-```yaml
-Scenario: 100K users, 2K active monthly
-
-Self-Hosted:
-  Infrastructure:
-    - VPS: $40/month (4GB RAM, 2 vCPU)
-    - Database: Included
-    - SSL Cert: $10/month
-    - Backup: $5/month
-  Total: $55/month
+```javascript
+// cost-monitor.js
+class CostMonitor {
+  async trackUsage(metric, value = 1) {
+    await cloudwatch.putMetricData({
+      Namespace: 'AuthService',
+      MetricData: [{
+        MetricName: metric,
+        Value: value,
+        Timestamp: new Date(),
+        Dimensions: [
+          {
+            Name: 'Environment',
+            Value: process.env.STAGE
+          }
+        ]
+      }]
+    }).promise();
+  }
   
-Auth0:
-  Free Tier: 7,000 active users
-  B2C Essential: $1,400/month (100K users)
-  Only Active: ~$30/month (2K users) if negotiated
-  
-AWS Cognito:
-  First 50K MAU: Free
-  Next 50K: $0.0055/MAU
-  Our Cost: $0 (under free tier)
-  
-Azure AD B2C:
-  First 50K MAU: Free
-  Next 50K: $0.0055/MAU
-  Our Cost: $0 (under free tier)
-  
-Recommendation: 
-  - Start with AWS Cognito or Azure AD B2C
-  - Self-host only if special requirements
-  - Negotiate enterprise deals if growing
+  async estimateMonthlyCost() {
+    const metrics = await this.getMonthlyMetrics();
+    
+    const costs = {
+      lambda: {
+        requests: metrics.lambdaInvocations * 0.0000002,
+        compute: metrics.lambdaGBSeconds * 0.0000166667
+      },
+      dynamodb: {
+        reads: metrics.dynamoReads * 0.00000025,
+        writes: metrics.dynamoWrites * 0.00000125,
+        storage: metrics.dynamoStorageGB * 0.25
+      },
+      elasticache: {
+        nodes: metrics.cacheNodes * 0.017 * 730 // t3.micro hourly
+      },
+      apiGateway: {
+        requests: metrics.apiRequests * 0.0000035
+      }
+    };
+    
+    const total = Object.values(costs).reduce((sum, category) => 
+      sum + Object.values(category).reduce((s, v) => s + v, 0), 0
+    );
+    
+    return { costs, total };
+  }
+}
 ```
 
 ## Security Best Practices
 
-### OAuth Security Checklist
+### Token Security
 
-```csharp
-public class OAuthSecurityConfig
-{
-    public void ConfigureSecureOAuth(IServiceCollection services)
-    {
-        services.Configure<OAuthOptions>(options =>
-        {
-            // 1. Always use HTTPS
-            options.RequireHttpsMetadata = true;
-            
-            // 2. Use PKCE for all flows
-            options.UsePkce = true;
-            
-            // 3. Validate state parameter
-            options.StateDataFormat = new PropertiesDataFormat(
-                new AesDataProtector());
-                
-            // 4. Short-lived tokens
-            options.AccessTokenLifetime = TimeSpan.FromMinutes(15);
-            options.RefreshTokenLifetime = TimeSpan.FromDays(30);
-            
-            // 5. Secure token storage
-            options.SaveTokens = false; // Don't save in cookies
-            
-            // 6. Strict redirect URI validation
-            options.ValidateRedirectUri = true;
-            options.RedirectUriValidator = new StrictRedirectUriValidator();
-        });
+```javascript
+// token-security.js
+class TokenSecurity {
+  constructor() {
+    this.tokenBlacklist = new Set();
+    this.refreshTokenRotation = true;
+  }
+  
+  async generateTokens(userId, clientId, scope) {
+    const tokenId = crypto.randomBytes(16).toString('hex');
+    
+    // Access token with minimal data
+    const accessToken = jwt.sign({
+      sub: userId,
+      client_id: clientId,
+      scope: scope,
+      jti: tokenId,
+      token_type: 'access'
+    }, process.env.JWT_SECRET, {
+      expiresIn: '1h',
+      issuer: process.env.ISSUER,
+      audience: clientId
+    });
+    
+    // Refresh token with rotation
+    const refreshTokenValue = crypto.randomBytes(32).toString('hex');
+    const refreshTokenHash = crypto.createHash('sha256')
+      .update(refreshTokenValue)
+      .digest('hex');
+    
+    await db.refreshTokens.create({
+      token_hash: refreshTokenHash,
+      user_id: userId,
+      client_id: clientId,
+      scope: scope,
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      token_family: crypto.randomBytes(16).toString('hex')
+    });
+    
+    return {
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_token: refreshTokenValue,
+      scope: scope
+    };
+  }
+  
+  async refreshToken(refreshToken, clientId) {
+    const tokenHash = crypto.createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+    
+    const storedToken = await db.refreshTokens.findByHash(tokenHash);
+    
+    if (!storedToken || storedToken.client_id !== clientId) {
+      throw new Error('Invalid refresh token');
     }
     
-    // Implement secure token storage
-    public class SecureTokenStorage
-    {
-        public async Task StoreTokens(string userId, TokenResponse tokens)
-        {
-            // Encrypt tokens at rest
-            var encryptedAccess = _encryption.Encrypt(tokens.AccessToken);
-            var encryptedRefresh = _encryption.Encrypt(tokens.RefreshToken);
-            
-            // Store with automatic expiration
-            var pipeline = _redis.CreateBatch();
-            
-            pipeline.StringSetAsync(
-                $"access:{userId}",
-                encryptedAccess,
-                TimeSpan.FromMinutes(15));
-                
-            pipeline.StringSetAsync(
-                $"refresh:{userId}",
-                encryptedRefresh,
-                TimeSpan.FromDays(30));
-                
-            await pipeline.ExecuteAsync();
-        }
+    if (storedToken.revoked_at) {
+      // Possible token reuse - revoke entire family
+      await this.revokeTokenFamily(storedToken.token_family);
+      throw new Error('Token reuse detected');
     }
+    
+    if (storedToken.expires_at < new Date()) {
+      throw new Error('Refresh token expired');
+    }
+    
+    // Revoke old token
+    await db.refreshTokens.revoke(storedToken.id);
+    
+    // Generate new tokens with same family
+    const newTokens = await this.generateTokens(
+      storedToken.user_id,
+      clientId,
+      storedToken.scope
+    );
+    
+    // Update token family
+    await db.refreshTokens.updateFamily(
+      newTokens.refresh_token,
+      storedToken.token_family
+    );
+    
+    return newTokens;
+  }
+  
+  async revokeTokenFamily(tokenFamily) {
+    await db.refreshTokens.revokeFamily(tokenFamily);
+    
+    // Log security event
+    await securityLogger.log('token_family_revoked', {
+      token_family: tokenFamily,
+      timestamp: new Date()
+    });
+  }
 }
 ```
 
-### Common Vulnerabilities and Mitigation
+### Security Headers and CORS
 
-```csharp
-public class SecurityMitigations
-{
-    // 1. Prevent token replay attacks
-    public class TokenReplayPrevention
-    {
-        private readonly IDistributedCache _cache;
-        
-        public async Task<bool> ValidateNonce(string nonce)
-        {
-            var key = $"nonce:{nonce}";
-            var exists = await _cache.GetAsync(key) != null;
-            
-            if (exists)
-            {
-                return false; // Replay attempt
-            }
-            
-            // Store nonce for token lifetime
-            await _cache.SetAsync(key, new byte[1], 
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15)
-                });
-                
-            return true;
-        }
-    }
+```javascript
+// security-middleware.js
+const helmet = require('helmet');
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman)
+    if (!origin) return callback(null, true);
     
-    // 2. Prevent authorization code injection
-    public class AuthorizationCodeValidator
-    {
-        public async Task<bool> ValidateCode(string code, string clientId)
-        {
-            var storedCode = await _cache.GetStringAsync($"authcode:{code}");
-            if (storedCode == null)
-            {
-                return false;
-            }
-            
-            var codeData = JsonSerializer.Deserialize<AuthCodeData>(storedCode);
-            
-            // Validate client
-            if (codeData.ClientId != clientId)
-            {
-                await _logger.LogSecurityEvent("Code injection attempt", clientId);
-                return false;
-            }
-            
-            // Single use
-            await _cache.RemoveAsync($"authcode:{code}");
-            
-            return true;
+    db.oauthClients.findByRedirectUri(origin)
+      .then(client => {
+        if (client) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
         }
-    }
+      })
+      .catch(err => callback(err));
+  },
+  credentials: true,
+  maxAge: 86400 // 24 hours
+};
+
+app.use(cors(corsOptions));
+```
+
+## Implementation Guide
+
+### Phase 1: Core OAuth Server (Week 1-2)
+
+```yaml
+Tasks:
+  1. Database Setup:
+     - User tables
+     - OAuth client management
+     - Token storage
+     
+  2. Basic Endpoints:
+     - /authorize
+     - /token
+     - /userinfo
+     - /.well-known/openid-configuration
+     
+  3. Token Management:
+     - JWT generation
+     - Refresh token handling
+     - Token revocation
+```
+
+### Phase 2: Email/Password Auth (Week 3)
+
+```yaml
+Tasks:
+  1. Registration Flow:
+     - Email validation
+     - Password strength checking
+     - Verification emails
+     
+  2. Login Flow:
+     - Rate limiting
+     - Failed attempt tracking
+     - Session management
+     
+  3. Password Management:
+     - Reset flow
+     - Change password
+     - Password history
+```
+
+### Phase 3: External Providers (Week 4-5)
+
+```yaml
+Tasks:
+  1. Provider Integration:
+     - GitHub OAuth
+     - Google OAuth
+     - Microsoft OAuth
+     
+  2. Account Linking:
+     - Multiple providers per user
+     - Email matching
+     - Manual linking UI
+     
+  3. Token Management:
+     - Store provider tokens
+     - Handle token refresh
+     - Scope management
+```
+
+### Phase 4: SSO Implementation (Week 6-7)
+
+```yaml
+Tasks:
+  1. SAML Support:
+     - SP implementation
+     - Metadata generation
+     - Assertion handling
+     
+  2. Multi-Tenant:
+     - Tenant configuration
+     - Domain mapping
+     - Custom branding
+     
+  3. Enterprise Features:
+     - Just-in-time provisioning
+     - Group mapping
+     - Attribute mapping
+```
+
+### Phase 5: Production Readiness (Week 8)
+
+```yaml
+Tasks:
+  1. Security Hardening:
+     - Penetration testing
+     - Security headers
+     - Rate limiting
+     
+  2. Monitoring:
+     - Health checks
+     - Metrics collection
+     - Alert configuration
+     
+  3. Documentation:
+     - API documentation
+     - Integration guides
+     - Security policies
+```
+
+## Monitoring and Maintenance
+
+### Key Metrics
+
+```javascript
+// metrics.js
+class AuthMetrics {
+  constructor() {
+    this.prometheus = new PrometheusClient();
+  }
+  
+  setupMetrics() {
+    // Counter metrics
+    this.loginAttempts = new Counter({
+      name: 'auth_login_attempts_total',
+      help: 'Total login attempts',
+      labelNames: ['method', 'status']
+    });
     
-    // 3. Rate limiting
-    public class AuthRateLimiter
-    {
-        public async Task<bool> CheckRateLimit(string identifier)
-        {
-            var key = $"rate:{identifier}";
-            var attempts = await _cache.GetAsync<int>(key);
-            
-            if (attempts > 10) // 10 attempts per minute
-            {
-                await _logger.LogRateLimitExceeded(identifier);
-                return false;
-            }
-            
-            await _cache.IncrementAsync(key);
-            await _cache.SetExpirationAsync(key, TimeSpan.FromMinutes(1));
-            
-            return true;
-        }
-    }
+    this.tokenIssuance = new Counter({
+      name: 'auth_tokens_issued_total',
+      help: 'Total tokens issued',
+      labelNames: ['token_type', 'grant_type']
+    });
+    
+    // Histogram metrics
+    this.authDuration = new Histogram({
+      name: 'auth_request_duration_seconds',
+      help: 'Authentication request duration',
+      labelNames: ['endpoint'],
+      buckets: [0.1, 0.5, 1, 2, 5]
+    });
+    
+    // Gauge metrics
+    this.activeSessions = new Gauge({
+      name: 'auth_active_sessions',
+      help: 'Number of active sessions'
+    });
+    
+    this.configuredProviders = new Gauge({
+      name: 'auth_configured_providers',
+      help: 'Number of configured auth providers',
+      labelNames: ['type']
+    });
+  }
+  
+  async collectMetrics() {
+    // Collect active sessions
+    const sessionCount = await db.userSessions.countActive();
+    this.activeSessions.set(sessionCount);
+    
+    // Collect provider stats
+    const providers = await db.externalProviders.countByType();
+    providers.forEach(p => {
+      this.configuredProviders.labels(p.type).set(p.count);
+    });
+  }
 }
 ```
 
-## Implementation Roadmap
+### Health Checks
 
-### Phase 1: Basic Authentication (Week 1-2)
-
-```yaml
-Tasks:
-  - Set up database schema
-  - Implement email/password registration
-  - Create login endpoints
-  - Add email verification
-  - Implement password reset
-  - Add rate limiting
+```javascript
+// health-checks.js
+app.get('/health', async (req, res) => {
+  const checks = {
+    database: await checkDatabase(),
+    redis: await checkRedis(),
+    externalProviders: await checkExternalProviders()
+  };
   
-Deliverables:
-  - Working registration/login
-  - Email verification flow
-  - Password reset functionality
-  - Basic security measures
-```
-
-### Phase 2: OAuth Integration (Week 3-4)
-
-```yaml
-Tasks:
-  - Register OAuth applications
-  - Implement Google OAuth
-  - Add Microsoft OAuth
-  - Implement GitHub OAuth
-  - Create account linking
-  - Add provider selection UI
+  const healthy = Object.values(checks).every(c => c.status === 'healthy');
   
-Deliverables:
-  - Multi-provider login
-  - Account linking
-  - Provider management
-  - Unified token system
-```
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'healthy' : 'unhealthy',
+    checks,
+    timestamp: new Date().toISOString()
+  });
+});
 
-### Phase 3: SSO & Enterprise (Week 5-6)
+async function checkDatabase() {
+  try {
+    await db.raw('SELECT 1');
+    return { status: 'healthy' };
+  } catch (error) {
+    return { status: 'unhealthy', error: error.message };
+  }
+}
 
-```yaml
-Tasks:
-  - Add SAML support
-  - Implement OIDC discovery
-  - Create enterprise onboarding
-  - Add domain verification
-  - Implement JIT provisioning
-  - Create admin portal
+async function checkExternalProviders() {
+  const providers = ['github', 'google', 'microsoft'];
+  const results = {};
   
-Deliverables:
-  - Enterprise SSO support
-  - Self-service onboarding
-  - Domain management
-  - User provisioning
-```
-
-### Phase 4: Optimization (Week 7-8)
-
-```yaml
-Tasks:
-  - Implement user archival
-  - Add caching layer
-  - Optimize token strategy
-  - Create monitoring dashboard
-  - Performance testing
-  - Security audit
-  
-Deliverables:
-  - Cost-optimized system
-  - Performance metrics
-  - Security report
-  - Operations runbook
-```
-
-## Monitoring & Maintenance
-
-### Key Metrics to Track
-
-```csharp
-public class AuthenticationMetrics
-{
-    // Real-time metrics
-    public class MetricsCollector
-    {
-        public async Task TrackMetrics()
-        {
-            // Registration funnel
-            _metrics.TrackGauge("auth.registrations.started", count);
-            _metrics.TrackGauge("auth.registrations.completed", count);
-            _metrics.TrackGauge("auth.registrations.abandoned", count);
-            
-            // Login metrics
-            _metrics.TrackGauge("auth.logins.success", count);
-            _metrics.TrackGauge("auth.logins.failed", count);
-            _metrics.TrackGauge("auth.logins.locked", count);
-            
-            // Provider usage
-            foreach (var provider in _providers)
-            {
-                _metrics.TrackGauge($"auth.provider.{provider}.usage", count);
-                _metrics.TrackGauge($"auth.provider.{provider}.errors", count);
-            }
-            
-            // Performance
-            _metrics.TrackHistogram("auth.login.duration", duration);
-            _metrics.TrackHistogram("auth.token.generation", duration);
-            
-            // Cost optimization
-            _metrics.TrackGauge("auth.users.active", activeCount);
-            _metrics.TrackGauge("auth.users.dormant", dormantCount);
-            _metrics.TrackGauge("auth.storage.cost", estimatedCost);
-        }
+  for (const provider of providers) {
+    try {
+      const response = await fetch(providerHealthEndpoints[provider], {
+        timeout: 5000
+      });
+      results[provider] = response.ok ? 'healthy' : 'degraded';
+    } catch (error) {
+      results[provider] = 'unhealthy';
     }
+  }
+  
+  return {
+    status: Object.values(results).some(r => r === 'unhealthy') ? 'degraded' : 'healthy',
+    providers: results
+  };
 }
 ```
 
-### Monitoring Dashboard
+## Decision Framework
+
+### When to Self-Host OAuth
 
 ```yaml
-Grafana Dashboard:
-  Row 1 - Overview:
-    - Total users
-    - Active users (24h)
-    - Login success rate
-    - Average login time
-    
-  Row 2 - Providers:
-    - Provider distribution pie chart
-    - Provider error rates
-    - OAuth callback times
-    - Token generation rate
-    
-  Row 3 - Security:
-    - Failed login attempts
-    - Locked accounts
-    - Rate limit hits
-    - Suspicious activity
-    
-  Row 4 - Performance:
-    - API response times
-    - Database query times
-    - Cache hit rates
-    - Token validation speed
-    
-  Row 5 - Cost:
-    - Active vs dormant users
-    - Storage utilization
-    - Compute usage
-    - Projected monthly cost
+Self-Host When:
+  - Need complete control over user data
+  - Complex authorization requirements
+  - Multi-tenant with custom branding
+  - Compliance requires on-premises
+  - Cost effective at scale (>10k MAU)
+  - Need custom authentication flows
+
+Use Auth0/Okta When:
+  - Quick time to market
+  - Small team, limited resources
+  - Standard authentication needs
+  - Global compliance requirements
+  - < 5,000 monthly active users
+  - Need enterprise support
 ```
 
-### Maintenance Checklist
+### Provider Selection Matrix
+
+| Provider | Best For | Considerations |
+|----------|----------|----------------|
+| **IdentityServer** | .NET shops, complex requirements | Requires .NET expertise |
+| **Keycloak** | Java/Enterprise, SAML heavy | Resource intensive |
+| **Custom** | Specific requirements, full control | High maintenance |
+| **Auth0** | Quick setup, global compliance | Expensive at scale |
+| **AWS Cognito** | AWS ecosystem, serverless | Vendor lock-in |
+| **Firebase Auth** | Mobile apps, Google ecosystem | Limited customization |
+
+### Cost Comparison (2k Active Users)
 
 ```yaml
-Daily:
-  - Monitor error rates
-  - Check failed login patterns
-  - Review security alerts
-  - Verify backup completion
+Self-Hosted (AWS):
+  Infrastructure: ~$50/month
+  - Lambda: ~$5
+  - DynamoDB: ~$10
+  - ElastiCache: ~$15
+  - RDS: ~$20
+  
+  Development: $20k-40k initial
+  Maintenance: ~$2k/month (0.1 FTE)
+  
+  Total Year 1: ~$45k
+  Total Year 2+: ~$25k/year
 
-Weekly:
-  - Review user growth
-  - Analyze provider usage
-  - Check performance metrics
-  - Update security rules
+Auth0:
+  Free tier: 7,000 active users
+  Cost: $0 for 2k users
+  
+  But at 10k users: ~$500/month
+  At 50k users: ~$2,500/month
 
-Monthly:
-  - Rotate signing keys
-  - Archive inactive users  
-  - Review cost optimization
-  - Update OAuth app settings
-  - Security dependency updates
-
-Quarterly:
-  - Full security audit
-  - Penetration testing
-  - Disaster recovery drill
-  - Provider agreement review
-  - Cost analysis and optimization
+AWS Cognito:
+  First 50k MAU: Free
+  Cost: $0 for 2k users
+  
+  But less flexibility for external providers
 ```
 
-## Summary & Best Practices
+## Conclusion
 
-### Quick Decision Guide
+For 100k prebuilt users with only 2k active:
+1. **Start with AWS Cognito or Auth0 free tier**
+2. **Implement lazy migration from existing system**
+3. **Plan for self-hosted migration at 5k+ MAU**
+4. **Use JWT to minimize database lookups**
+5. **Implement aggressive caching strategies**
+6. **Monitor costs and usage closely**
 
-```yaml
-For 100K Users, 2K Active:
-  Recommended Stack:
-    - Primary: AWS Cognito or Azure AD B2C (free tier)
-    - Fallback: Self-hosted for special requirements
-    - Database: PostgreSQL for cost optimization
-    - Caching: Redis for active users
-    - Monitoring: Open source stack (Prometheus + Grafana)
-    
-  Architecture:
-    - Stateless JWTs for scalability
-    - Short-lived access tokens (15 min)
-    - Refresh tokens in Redis
-    - User archival after 90 days
-    - JIT provisioning for returning users
-    
-  Security:
-    - HTTPS everywhere
-    - PKCE for all OAuth flows
-    - Rate limiting on all endpoints
-    - Regular security audits
-    - Automated vulnerability scanning
-```
-
-### Do's and Don'ts
-
-```yaml
-DO:
-  - Use established OAuth libraries
-  - Implement account linking from start
-  - Plan for provider changes
-  - Monitor costs continuously
-  - Archive inactive users
-  - Use caching aggressively
-  - Implement proper logging
-  - Regular security updates
-
-DON'T:
-  - Store tokens in cookies
-  - Implement OAuth from scratch
-  - Trust user input
-  - Ignore rate limiting
-  - Keep all users in hot storage
-  - Use long-lived tokens
-  - Skip security headers
-  - Forget about compliance
-```
+The key is balancing control, cost, and complexity. Start simple, measure everything, and migrate when the economics make sense.

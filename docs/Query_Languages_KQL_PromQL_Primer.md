@@ -1,776 +1,925 @@
-# Query Languages Primer: KQL, PromQL and Modern Log Querying
+# KQL and PromQL Query Languages Primer
+## Mastering Observability Query Languages
 
-## A Comprehensive Guide to Querying Monitoring and Log Data
+### Executive Summary
 
-### Table of Contents
-1. [Introduction to Query Languages](#introduction-to-query-languages)
-2. [KQL (Kusto Query Language)](#kql-kusto-query-language)
-3. [PromQL (Prometheus Query Language)](#promql-prometheus-query-language)
-4. [Lucene/Elasticsearch Query DSL](#luceneelasticsearch-query-dsl)
-5. [LogQL (Loki Query Language)](#logql-loki-query-language)
-6. [SQL for Logs](#sql-for-logs)
-7. [Comparison and Best Practices](#comparison-and-best-practices)
-8. [Advanced Query Patterns](#advanced-query-patterns)
-9. [Performance Optimization](#performance-optimization)
-10. [Future of Log Querying](#future-of-log-querying)
+Modern observability requires powerful query languages to extract insights from massive volumes of logs, metrics, and traces. This primer covers Kusto Query Language (KQL) used in Azure services and Prometheus Query Language (PromQL) for metrics analysis, providing practical patterns for effective monitoring and troubleshooting.
 
-## Introduction to Query Languages
+## Table of Contents
 
-Modern observability platforms use specialized query languages optimized for time-series data, logs, and metrics. Understanding these languages is crucial for effective monitoring and troubleshooting.
+1. [KQL Fundamentals](#kql-fundamentals)
+2. [KQL Advanced Patterns](#kql-advanced-patterns)
+3. [PromQL Fundamentals](#promql-fundamentals)
+4. [PromQL Advanced Patterns](#promql-advanced-patterns)
+5. [Common Use Cases](#common-use-cases)
+6. [Performance Optimization](#performance-optimization)
+7. [Integration Patterns](#integration-patterns)
+8. [Alerting Strategies](#alerting-strategies)
+9. [Visualization Best Practices](#visualization-best-practices)
+10. [Query Comparison](#query-comparison)
 
-### Why Specialized Query Languages?
+## KQL Fundamentals
 
-```yaml
-Traditional SQL Limitations:
-  - Not optimized for time-series data
-  - Complex syntax for common monitoring tasks
-  - Limited built-in functions for metrics
-  - Poor performance on high-cardinality data
+### What is KQL?
 
-Specialized Languages Benefits:
-  - Time-series native operations
-  - Built-in aggregation functions
-  - Optimized for streaming data
-  - Domain-specific functions
-  - Better performance at scale
-```
+Kusto Query Language (KQL) is a powerful query language used across Azure services including:
+- Application Insights
+- Log Analytics
+- Azure Data Explorer
+- Microsoft Defender
+- Azure Monitor
 
-## KQL (Kusto Query Language)
-
-KQL is Microsoft's query language used in Azure Monitor, Application Insights, and Azure Data Explorer.
-
-### KQL Fundamentals
+### Basic KQL Structure
 
 ```kql
-// Basic structure: source | operator | operator | ...
-requests
-| where timestamp > ago(1h)
-| summarize count() by bin(timestamp, 5m)
-| render timechart
-
-// Key concepts:
-// - Pipe-based syntax
-// - Schema-aware
-// - Rich type system
-// - Extensive built-in functions
+// Basic query structure
+TableName
+| where TimeGenerated > ago(1h)
+| summarize count() by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc
+| take 100
 ```
 
-### Essential KQL Operators
+### Core Operators
 
 ```kql
-// 1. Filtering
+// Filtering
 requests
-| where duration > 1000
 | where success == false
-| where name contains "api"
-| where customDimensions.userId in ("user1", "user2")
+| where duration > 1000
+| where customDimensions.Environment == "Production"
 
-// 2. Projection
+// Projection
 requests
 | project 
     timestamp,
-    name,
     duration,
-    userId = tostring(customDimensions.userId)
-| extend durationInSeconds = duration / 1000
+    resultCode,
+    Environment = tostring(customDimensions.Environment)
 
-// 3. Aggregation
+// Aggregation
 requests
 | summarize 
-    avg_duration = avg(duration),
-    p95_duration = percentile(duration, 95),
-    request_count = count()
-    by bin(timestamp, 5m), name
+    RequestCount = count(),
+    AvgDuration = avg(duration),
+    P95Duration = percentile(duration, 95)
+    by bin(timestamp, 5m)
 
-// 4. Joining
-let userSessions = 
-    customEvents
-    | where name == "SessionStart"
-    | project sessionId = tostring(customDimensions.sessionId), userId;
+// Joining
 requests
-| join kind=inner userSessions on $left.session_Id == $right.sessionId
-| project timestamp, name, duration, userId
+| join kind=inner (
+    exceptions
+    | project timestamp, operation_Id, message
+) on operation_Id
 
-// 5. Time series analysis
+// Time series
 requests
 | make-series 
-    avg_duration = avg(duration) default=0
+    RequestsPerMin = count() 
+    on timestamp 
+    from ago(1h) to now() 
+    step 1m
+```
+
+### String Operations
+
+```kql
+// String matching
+traces
+| where message contains "error"
+| where message !contains "warning"
+| where message startswith "Failed"
+| where message endswith ".jpg"
+| where message matches regex @"Error:\s\d+"
+
+// String manipulation
+traces
+| extend 
+    ErrorCode = extract(@"Error:\s(\d+)", 1, message),
+    Username = tostring(split(customDimensions.User, "@")[0]),
+    Domain = tostring(split(customDimensions.User, "@")[1])
+
+// Parse operators
+customEvents
+| where name == "ApiCall"
+| extend details = parse_json(tostring(customDimensions.Details))
+| project 
+    timestamp,
+    api = tostring(details.api),
+    duration = toint(details.duration)
+```
+
+### Time Operations
+
+```kql
+// Time filtering
+requests
+| where timestamp > ago(1h)
+| where timestamp between (datetime(2024-01-01) .. datetime(2024-01-31))
+| where dayofweek(timestamp) in (1, 7) // Monday or Sunday
+
+// Time bucketing
+requests
+| summarize count() by bin(timestamp, 5m)
+| summarize count() by bin(timestamp, 1h)
+| summarize count() by startofday(timestamp)
+
+// Time calculations
+requests
+| extend 
+    HourOfDay = hourofday(timestamp),
+    DayOfWeek = dayofweek(timestamp),
+    WeekOfYear = weekofyear(timestamp)
+| where HourOfDay between (9 .. 17) // Business hours
+```
+
+## KQL Advanced Patterns
+
+### Performance Analysis
+
+```kql
+// Identify slow requests
+let threshold = 1000; // milliseconds
+requests
+| where duration > threshold
+| summarize 
+    Count = count(),
+    AvgDuration = avg(duration),
+    P95 = percentile(duration, 95),
+    P99 = percentile(duration, 99)
+    by name, bin(timestamp, 5m)
+| where Count > 10 // Filter noise
+| order by P99 desc
+
+// Performance degradation detection
+let baseline = 
+    requests
+    | where timestamp between (ago(7d) .. ago(1d))
+    | summarize P95Baseline = percentile(duration, 95) by name;
+requests
+| where timestamp > ago(1h)
+| summarize P95Current = percentile(duration, 95) by name
+| join kind=inner baseline on name
+| extend DegradationPercent = (P95Current - P95Baseline) / P95Baseline * 100
+| where DegradationPercent > 20
+| project name, P95Baseline, P95Current, DegradationPercent
+```
+
+### Error Analysis
+
+```kql
+// Error rate calculation
+requests
+| summarize 
+    TotalRequests = count(),
+    FailedRequests = countif(success == false)
+    by bin(timestamp, 5m)
+| extend ErrorRate = round(100.0 * FailedRequests / TotalRequests, 2)
+| where ErrorRate > 1 // Alert threshold
+
+// Error pattern detection
+exceptions
+| where timestamp > ago(1h)
+| extend 
+    ErrorType = tostring(split(type, ".")[-1]),
+    ErrorMessage = substring(innermostMessage, 0, 100)
+| summarize 
+    Count = count(),
+    UniqueOperations = dcount(operation_Name),
+    SampleMessage = any(innermostMessage)
+    by ErrorType, ErrorMessage
+| order by Count desc
+| take 20
+
+// Correlated errors
+let errorWindow = 5m;
+let errors = 
+    exceptions
+    | where timestamp > ago(1h)
+    | project timestamp, operation_Id, type;
+requests
+| where timestamp > ago(1h)
+| where success == false
+| join kind=inner errors on operation_Id
+| summarize 
+    ErrorTypes = make_set(type),
+    ErrorCount = count()
+    by bin(timestamp, errorWindow), name
+| where ErrorCount > 5
+```
+
+### User Behavior Analysis
+
+```kql
+// User journey analysis
+let sessionTimeout = 30m;
+pageViews
+| where timestamp > ago(1d)
+| sort by user_Id, timestamp asc
+| extend 
+    SessionId = row_cumsum(
+        iff(timestamp - prev(timestamp, 1) > sessionTimeout, 1, 0), 
+        user_Id
+    )
+| summarize 
+    PageSequence = make_list(name),
+    Duration = max(timestamp) - min(timestamp),
+    PageCount = count()
+    by user_Id, SessionId
+| where PageCount > 3
+| take 100
+
+// Funnel analysis
+let step1 = pageViews | where name == "HomePage" | distinct user_Id;
+let step2 = pageViews | where name == "ProductPage" | distinct user_Id;
+let step3 = pageViews | where name == "CheckoutPage" | distinct user_Id;
+let step4 = customEvents | where name == "Purchase" | distinct user_Id;
+union
+    (step1 | extend Step = "1. HomePage" | count),
+    (step1 | join kind=inner step2 on user_Id | extend Step = "2. ProductPage" | count),
+    (step1 | join kind=inner step2 on user_Id | join kind=inner step3 on user_Id | extend Step = "3. CheckoutPage" | count),
+    (step1 | join kind=inner step2 on user_Id | join kind=inner step3 on user_Id | join kind=inner step4 on user_Id | extend Step = "4. Purchase" | count)
+| project Step, Users = Count
+```
+
+### Advanced Analytics
+
+```kql
+// Anomaly detection using built-in functions
+requests
+| where timestamp > ago(7d)
+| make-series 
+    RequestRate = count() 
     on timestamp 
     from ago(7d) to now() 
     step 1h
-    by name
-| extend (anomalies, score) = series_decompose_anomalies(avg_duration)
-```
+| extend (anomalies, score, baseline) = series_decompose_anomalies(RequestRate, 1.5)
+| mv-expand timestamp, RequestRate, anomalies, score, baseline
+| where anomalies != 0
+| project timestamp, RequestRate, baseline, score
 
-### Advanced KQL Patterns
-
-```kql
-// 1. Funnel Analysis
-let step1 = customEvents | where name == "HomePage" | distinct user_Id;
-let step2 = customEvents | where name == "ProductPage" | distinct user_Id;
-let step3 = customEvents | where name == "AddToCart" | distinct user_Id;
-let step4 = customEvents | where name == "Checkout" | distinct user_Id;
-union 
-    (step1 | extend Step = "1. HomePage" | count),
-    (step2 | extend Step = "2. ProductPage" | count),
-    (step3 | extend Step = "3. AddToCart" | count),
-    (step4 | extend Step = "4. Checkout" | count)
-| project Step, Users = Count
-
-// 2. Cohort Analysis
-let startDate = datetime(2024-01-01);
-customEvents
-| where timestamp >= startDate
-| extend Week = floor((timestamp - startDate) / 7d)
-| summarize Users = dcount(user_Id) by Week, name
-| evaluate pivot(name, sum(Users))
-
-// 3. Anomaly Detection
+// Forecasting
 requests
-| where timestamp > ago(24h)
-| summarize RequestCount = count() by bin(timestamp, 5m)
-| extend anomalies = series_decompose_anomalies(RequestCount, 2.5)
-| mv-expand timestamp, RequestCount, anomalies
-| where anomalies == 1
+| where timestamp > ago(30d)
+| make-series 
+    DailyRequests = count() 
+    on timestamp 
+    from ago(30d) to now() + 7d 
+    step 1d
+| extend forecast = series_decompose_forecast(DailyRequests, 7)
+| mv-expand timestamp, DailyRequests, forecast
+| where timestamp > now()
+| project timestamp, ForecastedRequests = forecast
 
-// 4. Performance Degradation Detection
-let baseline = 
+// Correlation analysis
+let metric1 = 
+    performanceCounters
+    | where name == "% Processor Time"
+    | summarize AvgCPU = avg(value) by bin(timestamp, 5m);
+let metric2 = 
     requests
-    | where timestamp between(ago(8d) .. ago(1d))
-    | summarize baseline_p95 = percentile(duration, 95) by name;
-requests
-| where timestamp > ago(1h)
-| summarize current_p95 = percentile(duration, 95) by name
-| join kind=inner baseline on name
-| extend degradation_percent = (current_p95 - baseline_p95) / baseline_p95 * 100
-| where degradation_percent > 20
-| order by degradation_percent desc
-
-// 5. Custom Metrics from Logs
-traces
-| where message startswith "METRIC:"
-| parse message with "METRIC: " metricName:string " VALUE: " metricValue:double " TAGS: " tags
-| extend tagPairs = split(tags, ",")
-| mv-expand tagPair = tagPairs
-| extend tag = split(tagPair, "=")
-| extend tagKey = tostring(tag[0]), tagValue = tostring(tag[1])
-| summarize avg(metricValue) by bin(timestamp, 1m), metricName, tagKey, tagValue
+    | summarize AvgDuration = avg(duration) by bin(timestamp, 5m);
+metric1
+| join kind=inner metric2 on timestamp
+| extend Correlation = series_pearson_correlation(AvgCPU, AvgDuration)
 ```
 
-### KQL Best Practices
+## PromQL Fundamentals
 
-```kql
-// 1. Use time filters first
-// Good
-requests
-| where timestamp > ago(1h)  // Time filter first
-| where duration > 1000
+### What is PromQL?
 
-// Bad
-requests
-| where duration > 1000
-| where timestamp > ago(1h)  // Time filter last
+Prometheus Query Language (PromQL) is designed for querying time series data in Prometheus and compatible systems like:
+- Prometheus
+- Cortex
+- Thanos
+- VictoriaMetrics
+- Grafana Mimir
 
-// 2. Use summarize before join
-// Good
-let summary = requests
-    | summarize count() by user_Id
-    | where count_ > 100;
-users
-| join kind=inner summary on user_Id
-
-// 3. Use extend for computed columns
-requests
-| extend 
-    durationSeconds = duration / 1000,
-    isSlowRequest = duration > 5000,
-    hourOfDay = hourofday(timestamp)
-
-// 4. Use let for reusable queries
-let errorRequests = requests | where success == false;
-let criticalErrors = errorRequests | where resultCode >= 500;
-criticalErrors
-| summarize ErrorCount = count() by bin(timestamp, 5m)
-```
-
-## PromQL (Prometheus Query Language)
-
-PromQL is designed specifically for querying Prometheus time-series data.
-
-### PromQL Fundamentals
+### Basic PromQL Structure
 
 ```promql
-# Basic structure: metric{labels}[time range]
+# Instant vector - current values
+http_requests_total
 
-# Instant vector - single value per series
-http_requests_total{job="api", status="200"}
+# Range vector - values over time
+http_requests_total[5m]
 
-# Range vector - multiple values per series
-http_requests_total{job="api"}[5m]
+# Scalar - single numerical value
+100
 
-# Scalar - single numeric value
-42
-
-# String - single string value (limited use)
-"api-server"
+# String - text value (limited use)
+"production"
 ```
 
-### Essential PromQL Functions
+### Selectors and Matchers
 
 ```promql
-# 1. Rate and increase
-# Rate - per-second average rate
-rate(http_requests_total[5m])
-
-# Increase - total increase over time
-increase(http_requests_total[1h])
-
-# 2. Aggregation
-# Sum across dimensions
-sum(rate(http_requests_total[5m])) by (job)
-
-# Average response time
-avg(http_request_duration_seconds) by (handler)
-
-# 95th percentile
-histogram_quantile(0.95, 
-  sum(rate(http_request_duration_seconds_bucket[5m])) by (le, handler)
-)
-
-# 3. Math operations
-# Error rate
-sum(rate(http_requests_total{status=~"5.."}[5m])) 
-  / 
-sum(rate(http_requests_total[5m]))
-
-# 4. Time-based functions
-# Average over time
-avg_over_time(up[5m])
-
-# Changes (useful for counters)
-changes(process_start_time_seconds[1h])
-
-# 5. Predictions
-# Linear regression
-predict_linear(node_filesystem_free_bytes[1h], 24*3600)
-```
-
-### Advanced PromQL Patterns
-
-```promql
-# 1. SLI/SLO Calculations
-# Availability SLI
-sum(rate(http_requests_total{status!~"5.."}[5m])) 
-  / 
-sum(rate(http_requests_total[5m])) 
-  * 100
-
-# Latency SLO (95th percentile under 500ms)
-histogram_quantile(0.95,
-  sum(rate(http_request_duration_seconds_bucket{le="0.5"}[5m])) by (le)
-) < 0.5
-
-# 2. Capacity Planning
-# Disk space exhaustion prediction
-predict_linear(
-  node_filesystem_avail_bytes{mountpoint="/"}[4h], 
-  7*24*3600
-) < 0
-
-# CPU saturation trend
-predict_linear(
-  avg_over_time(
-    1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))[30m:]
-  )[1h:], 
-  3600
-)
-
-# 3. Anomaly Detection
-# Z-score based anomaly
-(
-  rate(http_requests_total[5m]) 
-    - 
-  avg_over_time(rate(http_requests_total[5m])[1h:5m])
-) 
-  / 
-stddev_over_time(rate(http_requests_total[5m])[1h:5m]) 
-  > 3
-
-# 4. Service Dependencies
-# Error budget burn rate
-(
-  1 - (
-    sum(rate(http_requests_total{status!~"5.."}[5m])) by (service)
-      /
-    sum(rate(http_requests_total[5m])) by (service)
-  )
-) * 43800 # minutes in month
-
-# 5. Complex Aggregations
-# Top K with others
-topk(5, sum(rate(http_requests_total[5m])) by (endpoint))
-  or
-sum(rate(http_requests_total[5m])) by (endpoint) 
-  * 0 
-  + on() group_left sum(rate(http_requests_total[5m]))
-```
-
-### PromQL Recording Rules
-
-```yaml
-# prometheus-rules.yml
-groups:
-  - name: example
-    interval: 30s
-    rules:
-      # Pre-calculate expensive queries
-      - record: job:http_requests:rate5m
-        expr: |
-          sum(rate(http_requests_total[5m])) by (job)
-      
-      # Error rates
-      - record: job:http_errors:rate5m
-        expr: |
-          sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
-      
-      # SLI metrics
-      - record: job:availability:ratio_rate5m
-        expr: |
-          1 - (job:http_errors:rate5m / job:http_requests:rate5m)
-```
-
-## Lucene/Elasticsearch Query DSL
-
-Elasticsearch uses Lucene query syntax and its own Query DSL for complex searches.
-
-### Lucene Query Syntax
-
-```lucene
-# Basic text search
-error
-
-# Field search
-status:500
-
-# Phrase search
-"out of memory"
-
-# Boolean operators
-status:500 AND response_time:>1000
-status:(500 OR 503)
-NOT status:200
-
-# Wildcards
-host:api-*
-error_message:*timeout*
-
-# Range queries
-response_time:[1000 TO 5000]
-timestamp:[2024-01-01 TO 2024-01-31]
-status:[400 TO 499]
-
-# Fuzzy search
-kubernetes~  # matches kubernetes, kubernates, etc.
-
-# Proximity search
-"database error"~5  # words within 5 positions
-```
-
-### Elasticsearch Query DSL
-
-```json
-// 1. Match Query
-{
-  "query": {
-    "match": {
-      "message": "error exception"
-    }
-  }
-}
-
-// 2. Bool Query
-{
-  "query": {
-    "bool": {
-      "must": [
-        { "term": { "status": 500 } },
-        { "range": { "response_time": { "gte": 1000 } } }
-      ],
-      "filter": [
-        { "term": { "environment": "production" } },
-        { "range": { "@timestamp": { "gte": "now-1h" } } }
-      ],
-      "must_not": [
-        { "term": { "user": "healthcheck" } }
-      ]
-    }
-  }
-}
-
-// 3. Aggregations
-{
-  "size": 0,
-  "query": {
-    "range": { "@timestamp": { "gte": "now-1h" } }
-  },
-  "aggs": {
-    "errors_over_time": {
-      "date_histogram": {
-        "field": "@timestamp",
-        "interval": "5m"
-      },
-      "aggs": {
-        "error_count": {
-          "filter": { "term": { "level": "ERROR" } }
-        }
-      }
-    },
-    "top_errors": {
-      "terms": {
-        "field": "error_message.keyword",
-        "size": 10
-      }
-    }
-  }
-}
-
-// 4. Pipeline Aggregations
-{
-  "aggs": {
-    "sales_per_month": {
-      "date_histogram": {
-        "field": "@timestamp",
-        "interval": "month"
-      },
-      "aggs": {
-        "total_sales": { "sum": { "field": "amount" } },
-        "sales_derivative": {
-          "derivative": { "buckets_path": "total_sales" }
-        }
-      }
-    }
-  }
-}
-```
-
-## LogQL (Loki Query Language)
-
-LogQL is Grafana Loki's query language, inspired by PromQL but designed for logs.
-
-### LogQL Fundamentals
-
-```logql
-# Basic log stream selector
-{app="puzzle-api"}
+# Label matchers
+http_requests_total{method="GET"}
+http_requests_total{method!="GET"}
+http_requests_total{method=~"GET|POST"}
+http_requests_total{method!~"PUT|DELETE"}
 
 # Multiple labels
-{app="puzzle-api", env="production"}
+http_requests_total{method="GET", status="200", env="prod"}
 
-# Label matching
-{app=~"puzzle-.*", level="error"}
-
-# Line filter expressions
-{app="puzzle-api"} |= "error"
-{app="puzzle-api"} |~ "error|ERROR"
-{app="puzzle-api"} != "healthcheck"
-
-# JSON parsing
-{app="puzzle-api"} 
-  | json 
-  | line_format "{{.timestamp}} {{.level}} {{.message}}"
+# All metrics matching pattern
+{__name__=~"http_.*"}
 ```
 
-### LogQL Advanced Queries
+### Basic Operations
 
-```logql
-# 1. Log metrics
-rate({app="puzzle-api", level="error"}[5m])
+```promql
+# Rate calculation (most common)
+rate(http_requests_total[5m])
 
-# 2. Aggregations
-sum(rate({app="puzzle-api"} |= "error" [5m])) by (instance)
+# Increase over time window
+increase(http_requests_total[1h])
 
-# 3. Label extraction
-{app="puzzle-api"}
-  | regexp "(?P<method>\\w+) (?P<path>[^ ]+) (?P<status>\\d+)"
-  | line_format "{{.method}} {{.path}} returned {{.status}}"
+# Instant rate (less accurate)
+irate(http_requests_total[5m])
 
-# 4. JSON field filtering
-{app="puzzle-api"}
-  | json
-  | response_time > 1000
-  | line_format "Slow request: {{.request_id}} took {{.response_time}}ms"
+# Aggregation
+sum(rate(http_requests_total[5m]))
+avg(rate(http_requests_total[5m]))
+max(rate(http_requests_total[5m]))
+min(rate(http_requests_total[5m]))
+count(rate(http_requests_total[5m]))
+```
 
-# 5. Pattern matching
-sum by (level) (
-  count_over_time({app="puzzle-api"} 
-    | pattern "<_> <level> <_>" [5m]
+### Aggregation Operators
+
+```promql
+# Group by labels
+sum by (method, status) (rate(http_requests_total[5m]))
+
+# Keep all labels except specified
+sum without (instance, job) (rate(http_requests_total[5m]))
+
+# Topk/bottomk
+topk(5, rate(http_requests_total[5m]))
+bottomk(3, http_response_time_seconds)
+
+# Quantiles
+quantile(0.95, http_request_duration_seconds)
+histogram_quantile(0.95, rate(http_request_duration_bucket[5m]))
+```
+
+## PromQL Advanced Patterns
+
+### Performance Monitoring
+
+```promql
+# Request rate by endpoint
+sum by (endpoint) (rate(http_requests_total[5m]))
+
+# Error rate percentage
+100 * sum(rate(http_requests_total{status=~"5.."}[5m])) 
+  / sum(rate(http_requests_total[5m]))
+
+# Latency percentiles
+histogram_quantile(0.95,
+  sum by (endpoint, le) (
+    rate(http_request_duration_seconds_bucket[5m])
+  )
+)
+
+# SLI - Success rate
+1 - (
+  sum(rate(http_requests_total{status=~"5.."}[5m]))
+  / sum(rate(http_requests_total[5m]))
+)
+
+# Apdex score
+(
+  sum(rate(http_request_duration_seconds_bucket{le="0.5"}[5m])) +
+  sum(rate(http_request_duration_seconds_bucket{le="2"}[5m])) / 2
+) / sum(rate(http_request_duration_seconds_count[5m]))
+```
+
+### Resource Utilization
+
+```promql
+# CPU usage percentage
+100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+# Memory usage percentage
+100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))
+
+# Disk usage percentage
+100 - (node_filesystem_free_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs"} 
+  / node_filesystem_size_bytes * 100)
+
+# Network traffic
+rate(node_network_receive_bytes_total[5m]) + 
+rate(node_network_transmit_bytes_total[5m])
+
+# Container resource usage
+sum by (pod) (rate(container_cpu_usage_seconds_total[5m]))
+sum by (pod) (container_memory_usage_bytes)
+```
+
+### Kubernetes Monitoring
+
+```promql
+# Pod restarts
+increase(kube_pod_container_status_restarts_total[1h])
+
+# Deployment replicas mismatch
+kube_deployment_spec_replicas - kube_deployment_status_replicas
+
+# Node pressure conditions
+kube_node_status_condition{condition=~"DiskPressure|MemoryPressure|PIDPressure",status="true"}
+
+# Pod resource requests vs usage
+sum by (pod) (container_memory_usage_bytes) 
+  / sum by (pod) (kube_pod_container_resource_requests{resource="memory"})
+
+# Persistent volume usage
+kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes * 100
+```
+
+### Business Metrics
+
+```promql
+# Revenue per minute
+sum(rate(payment_processed_total[5m])) * avg(payment_amount_dollars)
+
+# Conversion rate
+sum(rate(checkout_completed_total[1h])) 
+  / sum(rate(checkout_started_total[1h])) * 100
+
+# Active users (using gauge)
+sum(increase(user_activity_timestamp[5m] > 0))
+
+# API usage by customer
+sum by (customer_id) (rate(api_requests_total[5m]))
+
+# SLA compliance
+avg_over_time(
+  (sum(rate(http_requests_total{status!~"5.."}[5m])) 
+    / sum(rate(http_requests_total[5m])))[30d:1h]
+) * 100
+```
+
+### Advanced Calculations
+
+```promql
+# Rate of change detection
+deriv(gauge_metric[5m])
+
+# Prediction (linear extrapolation)
+predict_linear(node_filesystem_free_bytes[1h], 4 * 3600)
+
+# Smoothing
+avg_over_time(volatile_metric[5m])
+
+# Z-score calculation
+(metric - avg_over_time(metric[1h])) 
+  / stddev_over_time(metric[1h])
+
+# Day-over-day comparison
+rate(http_requests_total[5m]) 
+  / rate(http_requests_total[5m] offset 1d)
+```
+
+## Common Use Cases
+
+### Application Performance Monitoring
+
+```kql
+// KQL - Request performance dashboard
+requests
+| where timestamp > ago(1h)
+| summarize 
+    RequestCount = count(),
+    AvgDuration = avg(duration),
+    P50 = percentile(duration, 50),
+    P95 = percentile(duration, 95),
+    P99 = percentile(duration, 99),
+    ErrorRate = round(100.0 * countif(success == false) / count(), 2)
+    by bin(timestamp, 1m), name
+| order by timestamp desc
+```
+
+```promql
+# PromQL - Request performance dashboard
+# Request rate
+sum by (endpoint) (rate(http_requests_total[5m]))
+
+# Latency percentiles
+histogram_quantile(0.95,
+  sum by (endpoint, le) (
+    rate(http_request_duration_seconds_bucket[5m])
+  )
+)
+
+# Error rate
+sum by (endpoint) (rate(http_requests_total{status=~"5.."}[5m]))
+  / sum by (endpoint) (rate(http_requests_total[5m])) * 100
+```
+
+### Infrastructure Monitoring
+
+```kql
+// KQL - Resource utilization
+performanceCounters
+| where timestamp > ago(30m)
+| where name in ("% Processor Time", "Available MBytes", "Disk Reads/sec", "Disk Writes/sec")
+| summarize 
+    AvgValue = avg(value),
+    MaxValue = max(value)
+    by bin(timestamp, 1m), computer, name
+| evaluate pivot(name, any(AvgValue))
+```
+
+```promql
+# PromQL - Resource utilization
+# CPU usage by instance
+100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+# Memory usage by instance
+(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) 
+  / node_memory_MemTotal_bytes * 100
+
+# Disk I/O
+rate(node_disk_read_bytes_total[5m]) + rate(node_disk_written_bytes_total[5m])
+```
+
+### User Experience Monitoring
+
+```kql
+// KQL - Page load performance
+pageViews
+| where timestamp > ago(1h)
+| extend LoadTimeBucket = case(
+    duration < 1000, "Fast (<1s)",
+    duration < 3000, "Moderate (1-3s)",
+    duration < 5000, "Slow (3-5s)",
+    "Very Slow (>5s)"
+    )
+| summarize 
+    Count = count(),
+    AvgDuration = avg(duration)
+    by LoadTimeBucket
+| order by AvgDuration asc
+```
+
+```promql
+# PromQL - User experience metrics
+# Page load time distribution
+histogram_quantile(0.95,
+  sum by (page, le) (
+    rate(page_load_duration_seconds_bucket[5m])
+  )
+)
+
+# Active sessions
+sum(increase(user_session_duration_seconds[5m] > 0))
+
+# Feature usage
+sum by (feature) (rate(feature_used_total[1h]))
+```
+
+## Performance Optimization
+
+### KQL Optimization
+
+```kql
+// Use time filters first
+requests
+| where timestamp > ago(1h)  // Always filter time first
+| where success == false
+| summarize count() by name
+
+// Avoid expensive operations on large datasets
+// Bad
+requests
+| extend Hour = hourofday(timestamp)
+| where Hour between (9 .. 17)
+
+// Good
+requests
+| where timestamp > ago(1h) and hourofday(timestamp) between (9 .. 17)
+
+// Use projection to reduce data
+requests
+| where timestamp > ago(1h)
+| project timestamp, name, duration, success  // Only needed columns
+| summarize avg(duration) by name
+
+// Pre-aggregate when possible
+requests
+| where timestamp > ago(24h)
+| summarize count() by bin(timestamp, 1h), name
+| where count_ > 1000  // Filter after aggregation
+```
+
+### PromQL Optimization
+
+```promql
+# Use recording rules for expensive queries
+# prometheus.rules.yml
+groups:
+  - name: aggregated_metrics
+    interval: 30s
+    rules:
+      - record: instance:node_cpu_utilization:rate5m
+        expr: |
+          100 - (avg by (instance) (
+            irate(node_cpu_seconds_total{mode="idle"}[5m])
+          ) * 100)
+      
+      - record: job:http_requests:rate5m
+        expr: |
+          sum by (job, method, status) (
+            rate(http_requests_total[5m])
+          )
+
+# Use efficient label matching
+# Bad - regex matching on high cardinality
+http_requests_total{instance=~"prod-.*"}
+
+# Good - exact matching
+http_requests_total{env="prod"}
+
+# Limit time ranges appropriately
+# Don't use unnecessarily long ranges
+rate(http_requests_total[5m])  # Good for dashboards
+rate(http_requests_total[1h])  # Only if needed for smoothing
+```
+
+## Integration Patterns
+
+### KQL with Application Insights
+
+```kql
+// Custom metrics correlation
+let customMetrics = customMetrics
+| where timestamp > ago(1h)
+| where name == "OrderProcessingTime"
+| summarize AvgProcessingTime = avg(value) by bin(timestamp, 5m);
+requests
+| where timestamp > ago(1h)
+| where name contains "Order"
+| summarize AvgDuration = avg(duration) by bin(timestamp, 5m)
+| join kind=inner customMetrics on timestamp
+| project timestamp, AvgDuration, AvgProcessingTime
+| extend Correlation = AvgDuration / AvgProcessingTime
+```
+
+### PromQL with Grafana
+
+```promql
+# Variable definitions for dashboards
+# $datacenter
+label_values(up, datacenter)
+
+# $instance
+label_values(up{datacenter="$datacenter"}, instance)
+
+# Dashboard query with variables
+sum by (instance) (
+  rate(http_requests_total{
+    datacenter="$datacenter",
+    instance=~"$instance"
+  }[$__rate_interval])
+)
+
+# Multi-value variable support
+sum by (endpoint) (
+  rate(http_requests_total{
+    method=~"$method"  # Supports multiple selections
+  }[5m])
+)
+```
+
+## Alerting Strategies
+
+### KQL Alert Queries
+
+```kql
+// High error rate alert
+requests
+| where timestamp > ago(5m)
+| summarize 
+    TotalRequests = count(),
+    FailedRequests = countif(success == false)
+| extend ErrorRate = 100.0 * FailedRequests / TotalRequests
+| where ErrorRate > 5 and TotalRequests > 100
+
+// Performance degradation alert
+let baseline = toscalar(
+    requests
+    | where timestamp between (ago(1d) .. ago(1h))
+    | summarize percentile(duration, 95)
+);
+requests
+| where timestamp > ago(10m)
+| summarize P95 = percentile(duration, 95)
+| where P95 > baseline * 1.5
+
+// Anomaly detection alert
+requests
+| where timestamp > ago(2h)
+| make-series RequestRate = count() on timestamp step 5m
+| extend (anomalies, score) = series_decompose_anomalies(RequestRate, 2)
+| mv-expand timestamp, RequestRate, anomalies, score
+| where anomalies != 0
+| where timestamp > ago(10m)
+```
+
+### PromQL Alert Rules
+
+```yaml
+# prometheus.alerts.yml
+groups:
+  - name: application_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) 
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+      
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (job, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "95th percentile latency is {{ $value }}s"
+      
+      - alert: PodCrashLooping
+        expr: |
+          increase(kube_pod_container_status_restarts_total[1h]) > 5
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Pod has restarted {{ $value }} times in the last hour"
+```
+
+## Visualization Best Practices
+
+### KQL Visualization
+
+```kql
+// Time series chart
+requests
+| where timestamp > ago(1h)
+| summarize count() by bin(timestamp, 1m)
+| render timechart
+
+// Multi-series comparison
+requests
+| where timestamp > ago(1h)
+| summarize count() by bin(timestamp, 5m), success
+| render timechart
+
+// Heatmap for patterns
+requests
+| where timestamp > ago(7d)
+| extend Hour = hourofday(timestamp)
+| extend DayOfWeek = dayofweek(timestamp)
+| summarize AvgDuration = avg(duration) by Hour, DayOfWeek
+| render heatmap
+
+// Pie chart for distribution
+requests
+| where timestamp > ago(1h)
+| summarize count() by resultCode
+| render piechart
+```
+
+### PromQL Visualization
+
+```promql
+# Grafana panel queries
+
+# Stacked area chart - request rate by status
+sum by (status) (rate(http_requests_total[5m]))
+
+# Heatmap - latency distribution
+sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
+
+# Gauge - current value
+avg(up{job="my-service"})
+
+# Table - top endpoints by error rate
+topk(10,
+  sum by (endpoint) (rate(http_requests_total{status=~"5.."}[5m]))
+  / sum by (endpoint) (rate(http_requests_total[5m]))
+)
+
+# Single stat - SLA percentage
+avg_over_time(
+  (1 - sum(rate(http_requests_total{status=~"5.."}[5m]))
+    / sum(rate(http_requests_total[5m])))[24h:5m]
+) * 100
+```
+
+## Query Comparison
+
+### Similar Concepts
+
+| Concept | KQL | PromQL |
+|---------|-----|--------|
+| Filter | `where` | Label selectors `{key="value"}` |
+| Time range | `ago(1h)` | `[1h]` |
+| Rate calculation | `count() / timespan` | `rate()` |
+| Aggregation | `summarize` | `sum by ()` |
+| Time buckets | `bin(timestamp, 5m)` | Automatic with `[5m]` |
+| Percentiles | `percentile()` | `histogram_quantile()` |
+| Join | `join` | Vector matching |
+| Null handling | `isnotnull()` | No nulls in Prometheus |
+
+### Query Examples
+
+**Count requests per minute:**
+
+```kql
+// KQL
+requests
+| where timestamp > ago(1h)
+| summarize count() by bin(timestamp, 1m)
+```
+
+```promql
+# PromQL
+sum(rate(http_requests_total[1m]))
+```
+
+**Error rate calculation:**
+
+```kql
+// KQL
+requests
+| where timestamp > ago(5m)
+| summarize 
+    ErrorRate = 100.0 * countif(success == false) / count()
+```
+
+```promql
+# PromQL
+sum(rate(http_requests_total{status=~"5.."}[5m])) 
+  / sum(rate(http_requests_total[5m])) * 100
+```
+
+**95th percentile latency:**
+
+```kql
+// KQL
+requests
+| where timestamp > ago(5m)
+| summarize percentile(duration, 95) by name
+```
+
+```promql
+# PromQL
+histogram_quantile(0.95,
+  sum by (endpoint, le) (
+    rate(http_request_duration_seconds_bucket[5m])
   )
 )
 ```
 
-## SQL for Logs
+## Conclusion
 
-Some platforms (ClickHouse, AWS Athena, BigQuery) use SQL for log analysis.
+Both KQL and PromQL are powerful query languages optimized for their respective domains:
 
-### ClickHouse Example
+### KQL Strengths
+- Rich string manipulation
+- Complex event correlation
+- Built-in ML functions
+- Flexible time operations
+- Ideal for logs and traces
 
-```sql
--- Basic log analysis
-SELECT 
-    toStartOfMinute(timestamp) as minute,
-    level,
-    COUNT(*) as count
-FROM logs
-WHERE timestamp >= now() - INTERVAL 1 HOUR
-GROUP BY minute, level
-ORDER BY minute DESC;
+### PromQL Strengths
+- Optimized for metrics
+- Efficient time series operations
+- Built-in rate calculations
+- Recording rules for performance
+- Ideal for real-time monitoring
 
--- Pattern detection
-WITH patterns AS (
-    SELECT 
-        extractAllGroupsVertical(message, '(\w+Exception)')[1] as exception_type,
-        COUNT(*) as count
-    FROM logs
-    WHERE level = 'ERROR'
-        AND timestamp >= now() - INTERVAL 24 HOUR
-    GROUP BY exception_type
-)
-SELECT * FROM patterns
-WHERE count > 10
-ORDER BY count DESC;
+### Best Practices
+1. **Learn the fundamentals** thoroughly before advanced features
+2. **Optimize queries** for performance from the start
+3. **Use appropriate time ranges** for your use case
+4. **Build reusable queries** through functions/recording rules
+5. **Test alerts** thoroughly before production
+6. **Document complex queries** for team understanding
+7. **Monitor query performance** in production
 
--- Response time percentiles
-SELECT
-    quantiles(0.5, 0.95, 0.99)(response_time) as percentiles,
-    endpoint
-FROM logs
-WHERE timestamp >= now() - INTERVAL 1 HOUR
-GROUP BY endpoint
-HAVING count() > 100
-ORDER BY percentiles[2] DESC;
-```
-
-## Comparison and Best Practices
-
-### Language Comparison Matrix
-
-| Feature | KQL | PromQL | Lucene/ES | LogQL | SQL |
-|---------|-----|---------|-----------|-------|-----|
-| **Time-series native** | ✓ | ✓✓✓ | ✓ | ✓✓ | ✓ |
-| **Full-text search** | ✓✓ | ✗ | ✓✓✓ | ✓✓ | ✓ |
-| **Learning curve** | Medium | Steep | Low/Medium | Medium | Low |
-| **Performance** | ✓✓✓ | ✓✓✓ | ✓✓ | ✓✓ | ✓✓✓ |
-| **Aggregations** | ✓✓✓ | ✓✓ | ✓✓✓ | ✓✓ | ✓✓✓ |
-| **Joins** | ✓✓ | ✗ | ✓ | ✗ | ✓✓✓ |
-| **Machine Learning** | ✓✓ | ✗ | ✓ | ✗ | ✓ |
-
-### Choosing the Right Language
-
-```yaml
-Use KQL When:
-  - Using Azure ecosystem
-  - Need rich analytics functions
-  - Complex event correlation
-  - Machine learning integration
-
-Use PromQL When:
-  - Metrics-focused monitoring
-  - SLI/SLO calculations
-  - Kubernetes monitoring
-  - Capacity planning
-
-Use Elasticsearch When:
-  - Full-text log search
-  - Complex document queries
-  - Need distributed search
-  - Mixed structured/unstructured data
-
-Use LogQL When:
-  - Grafana-centric stack
-  - Simple log aggregation
-  - Cost-conscious logging
-  - Kubernetes native
-
-Use SQL When:
-  - Team knows SQL
-  - Complex analytical queries
-  - Data warehouse integration
-  - Business intelligence needs
-```
-
-## Advanced Query Patterns
-
-### Cross-Language Patterns
-
-```yaml
-Pattern: Error Rate Calculation
-  KQL: |
-    requests
-    | summarize 
-        errors = countif(success == false),
-        total = count()
-    | extend error_rate = errors * 100.0 / total
-  
-  PromQL: |
-    sum(rate(http_requests_total{status=~"5.."}[5m]))
-      /
-    sum(rate(http_requests_total[5m]))
-    * 100
-  
-  LogQL: |
-    sum(rate({app="api"} |= "ERROR"[5m]))
-      /
-    sum(rate({app="api"}[5m]))
-    * 100
-
-Pattern: Top N with Others
-  KQL: |
-    requests
-    | summarize count() by endpoint
-    | top 5 by count_
-    | union (
-        requests
-        | summarize count() by endpoint
-        | top-nested of endpoint by count_ > 5
-        | summarize others = sum(count_)
-        | extend endpoint = "Others"
-    )
-  
-  PromQL: |
-    topk(5, sum by (endpoint) (rate(requests[5m])))
-      or
-    sum(sum by (endpoint) (rate(requests[5m]))) * 0 + 
-      on() group_left 
-    (sum(rate(requests[5m])) - sum(topk(5, sum by (endpoint) (rate(requests[5m])))))
-```
-
-### Performance Optimization Techniques
-
-```yaml
-General Optimization:
-  1. Time filtering:
-     - Always filter by time first
-     - Use appropriate time ranges
-     - Avoid scanning all data
-  
-  2. Field selection:
-     - Project only needed fields
-     - Avoid wildcard selections
-     - Use columnar storage benefits
-  
-  3. Aggregation pushdown:
-     - Aggregate early in pipeline
-     - Reduce data movement
-     - Use pre-aggregated data
-  
-  4. Index usage:
-     - Create appropriate indexes
-     - Use index-friendly queries
-     - Monitor index performance
-
-Query-Specific:
-  KQL:
-    - Use materialized views
-    - Leverage shuffle strategy
-    - Use update policies
-  
-  PromQL:
-    - Use recording rules
-    - Optimize label cardinality
-    - Tune retention policies
-  
-  Elasticsearch:
-    - Use filter context
-    - Optimize shard allocation
-    - Use runtime fields sparingly
-```
-
-## Future of Log Querying
-
-### Emerging Trends
-
-```yaml
-AI-Powered Querying:
-  - Natural language to query
-  - Automatic query optimization
-  - Anomaly detection built-in
-  - Pattern learning
-
-Unified Query Languages:
-  - SQL becoming standard
-  - Cross-platform compatibility
-  - Federation capabilities
-  - Standard query APIs
-
-Performance Innovations:
-  - Columnar storage adoption
-  - GPU acceleration
-  - Distributed query planning
-  - Smart caching strategies
-
-Developer Experience:
-  - Visual query builders
-  - Query recommendation
-  - Automatic indexing
-  - Cost prediction
-```
-
-### Next-Generation Platforms
-
-```yaml
-Apache Druid:
-  - Real-time analytics
-  - Sub-second queries
-  - High concurrency
-  - Time-series optimized
-
-ClickHouse:
-  - Columnar storage
-  - SQL with extensions
-  - Massive scalability
-  - Cost efficient
-
-Apache Pinot:
-  - Real-time OLAP
-  - Ultra-low latency
-  - Pluggable indexing
-  - Multi-tenancy
-
-DuckDB:
-  - In-process OLAP
-  - Parquet native
-  - Zero dependencies
-  - PostgreSQL compatible
-```
-
-## Best Practices Summary
-
-```yaml
-Query Writing:
-  1. Start simple, iterate
-  2. Use time bounds always
-  3. Test on small datasets
-  4. Monitor query performance
-  5. Document complex queries
-
-Performance:
-  1. Pre-aggregate when possible
-  2. Use appropriate retention
-  3. Index strategically
-  4. Cache query results
-  5. Monitor resource usage
-
-Maintenance:
-  1. Version control queries
-  2. Create query libraries
-  3. Standardize patterns
-  4. Regular optimization
-  5. Train team members
-
-Security:
-  1. Implement query limits
-  2. Use read-only access
-  3. Audit query usage
-  4. Sanitize user input
-  5. Monitor abnormal patterns
-```
+The key to mastery is understanding when to use each language and how to write efficient queries that provide actionable insights for your observability needs.

@@ -543,6 +543,42 @@ namespace CollaborativePuzzle.Infrastructure.Services
                 throw;
             }
         }
+        
+        /// <summary>
+        /// Gets a numeric value from Redis
+        /// </summary>
+        public async Task<long> GetLongAsync(string key)
+        {
+            try
+            {
+                var fullKey = BuildKey(key);
+                var value = await _database.StringGetAsync(fullKey);
+                
+                if (!value.HasValue)
+                {
+                    _logger.LogDebug("Key {Key} not found in Redis", fullKey);
+                    return 0;
+                }
+                
+                if (long.TryParse(value, out var result))
+                {
+                    return result;
+                }
+                
+                _logger.LogWarning("Key {Key} value could not be parsed as long: {Value}", fullKey, value);
+                return 0;
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogError(ex, "Redis error getting long value for {Key}", key);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting Redis long value for {Key}", key);
+                throw;
+            }
+        }
 
         /// <summary>
         /// Get multiple keys in a single operation

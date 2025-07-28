@@ -172,5 +172,17 @@ namespace CollaborativePuzzle.Infrastructure.Services
             }
             return Task.FromResult(0L);
         }
+        
+        public Task<long> GetLongAsync(string key)
+        {
+            if (_cache.TryGetValue(key, out var item))
+            {
+                if (item.expiry > DateTime.UtcNow && long.TryParse(item.value, out var value))
+                {
+                    return Task.FromResult(value);
+                }
+            }
+            return Task.FromResult(0L);
+        }
     }
 }

@@ -123,7 +123,7 @@ public class RateLimitTrackingMiddleware
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var minuteKey = $"{rateLimitKey}:{timestamp / 60}";
             
-            var currentCount = await redisService.GetAsync<long>($"{minuteKey}:total");
+            var currentCount = await redisService.GetLongAsync($"{minuteKey}:total");
             var limit = GetRateLimitForContext(context);
             
             context.Response.Headers["X-RateLimit-Limit"] = limit.ToString();

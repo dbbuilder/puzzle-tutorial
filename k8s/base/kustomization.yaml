@@ -4,22 +4,20 @@ kind: Kustomization
 namespace: puzzle-platform
 
 resources:
-- namespace.yaml
-- configmap.yaml
-- secrets.yaml
-- redis-deployment.yaml
-- sqlserver-deployment.yaml
-- mqtt-deployment.yaml
-- api-deployment.yaml
-- ingress.yaml
-- hpa.yaml
-- network-policies.yaml
-- service-monitor.yaml
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+  - secret.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - redis.yaml
+  - postgres.yaml
+  - mqtt.yaml
 
 commonLabels:
-  app.kubernetes.io/name: collaborative-puzzle
-  app.kubernetes.io/part-of: puzzle-platform
+  project: collaborative-puzzle
+  environment: base
 
 images:
-- name: puzzle-api
-  newTag: latest
+  - name: puzzle-api
+    newTag: latest
