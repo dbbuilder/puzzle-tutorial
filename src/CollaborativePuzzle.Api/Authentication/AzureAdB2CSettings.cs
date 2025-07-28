@@ -26,6 +26,16 @@ public class AzureAdB2CSettings
     public string ClientId { get; set; } = string.Empty;
     
     /// <summary>
+    /// The client secret for the registered application (for confidential clients)
+    /// </summary>
+    public string ClientSecret { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The redirect URI for OAuth2 callbacks
+    /// </summary>
+    public string RedirectUri { get; set; } = string.Empty;
+    
+    /// <summary>
     /// The sign-up/sign-in user flow name
     /// </summary>
     public string SignUpSignInPolicyId { get; set; } = string.Empty;

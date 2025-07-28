@@ -4,6 +4,7 @@ using CollaborativePuzzle.Core.DTOs;
 using CollaborativePuzzle.Core.Interfaces;
 using CollaborativePuzzle.Core.Models;
 using Microsoft.Extensions.Options;
+using Microsoft.Identity.Client;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
@@ -20,6 +21,7 @@ public class AzureAdB2CAuthenticationService : IExternalAuthenticationService
     private readonly IJwtService _jwtService;
     private readonly ILogger<AzureAdB2CAuthenticationService> _logger;
     private readonly IConfigurationManager<OpenIdConnectConfiguration> _configurationManager;
+    private readonly IConfidentialClientApplication _msalClient;
     private OpenIdConnectConfiguration? _openIdConfig;
     private DateTime _lastConfigRefresh = DateTime.MinValue;
     private readonly TimeSpan _configRefreshInterval = TimeSpan.FromHours(1);
@@ -39,6 +41,14 @@ public class AzureAdB2CAuthenticationService : IExternalAuthenticationService
             _settings.MetadataAddress,
             new OpenIdConnectConfigurationRetriever(),
             new HttpDocumentRetriever());
+            
+        // Initialize MSAL client for OAuth2 code exchange
+        _msalClient = ConfidentialClientApplicationBuilder
+            .Create(_settings.ClientId)
+            .WithClientSecret(_settings.ClientSecret)
+            .WithAuthority(_settings.Authority)
+            .WithRedirectUri(_settings.RedirectUri)
+            .Build();
     }
 
     /// <summary>
@@ -126,9 +136,80 @@ public class AzureAdB2CAuthenticationService : IExternalAuthenticationService
     {
         try
         {
-            // In a real implementation, you would exchange the code for tokens using MSAL
-            // For now, this is a placeholder
-            throw new NotImplementedException("Code exchange not implemented. Use MSAL library for production.");
+            // Exchange the authorization code for tokens
+            var result = await _msalClient
+                .AcquireTokenByAuthorizationCode(
+                    new[] { "openid", "email", "profile" },
+                    code)
+                .WithSpaAuthorizationCode() // For single-page applications
+                .ExecuteAsync();
+
+            if (result == null || string.IsNullOrEmpty(result.AccessToken))
+            {
+                return ExternalAuthenticationResult.CreateFailure("Failed to exchange authorization code");
+            }
+
+            // Validate the ID token
+            var validationResult = await ValidateTokenAsync(result.IdToken);
+            if (!validationResult.Success)
+            {
+                return validationResult;
+            }
+
+            // Extract user information from the token
+            var handler = new JwtSecurityTokenHandler();
+            var token = handler.ReadJwtToken(result.IdToken);
+            
+            var userId = token.Claims.FirstOrDefault(c => c.Type == "oid")?.Value 
+                      ?? token.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+            var email = token.Claims.FirstOrDefault(c => c.Type == "emails")?.Value 
+                     ?? token.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
+            var name = token.Claims.FirstOrDefault(c => c.Type == "name")?.Value 
+                    ?? token.Claims.FirstOrDefault(c => c.Type == "given_name")?.Value;
+
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(email))
+            {
+                return ExternalAuthenticationResult.CreateFailure("Invalid token: missing required claims");
+            }
+
+            // Check if user exists in our system
+            var existingUser = await _userService.GetUserByIdAsync(userId);
+            if (existingUser == null)
+            {
+                // Create new user from Azure AD B2C
+                var registerRequest = new RegisterRequest
+                {
+                    Username = email.Split('@')[0], // Use email prefix as username
+                    Email = email,
+                    Password = GenerateRandomPassword(), // Generate a random password for B2C users
+                    ConfirmPassword = GenerateRandomPassword()
+                };
+                
+                var createResult = await _userService.CreateUserAsync(registerRequest);
+                if (!createResult.Success)
+                {
+                    return ExternalAuthenticationResult.CreateFailure($"Failed to create user: {createResult.Error}");
+                }
+                
+                existingUser = createResult.User;
+            }
+
+            // Note: MSAL handles refresh tokens internally through its token cache
+            // In production, you would configure the token cache for persistence
+            _logger.LogInformation("Token exchange successful for user {UserId}", userId);
+
+            // Get user roles
+            var roles = await _userService.GetUserRolesAsync(userId);
+            
+            // Generate our internal JWT token
+            var internalToken = _jwtService.GenerateToken(existingUser!, roles.ToArray());
+            
+            return ExternalAuthenticationResult.CreateSuccess(existingUser!, internalToken, roles);
+        }
+        catch (MsalException msalEx)
+        {
+            _logger.LogWarning(msalEx, "MSAL exception during code exchange");
+            return ExternalAuthenticationResult.CreateFailure($"Authentication failed: {msalEx.Message}");
         }
         catch (Exception ex)
         {

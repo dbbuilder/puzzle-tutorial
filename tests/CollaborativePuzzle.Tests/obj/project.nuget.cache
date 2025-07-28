@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "bm3xlYwUpKkt0PvIz7VY98Y/R6X+mMSji9+uKt/Z1X5Ko31z3AaxUFAps6qWDKXpfr8VqQanqWPfBNWoGK7kPg==",
+  "dgSpecHash": "Vf5IIDF2rFeXSLYUqtaScrgjDU+rXfcTYFW1aDzzj3yv6hg0POHBa7uPtVtohGV3JvEwGOR81wYFuLxaPU/UVw==",
   "success": true,
   "projectFilePath": "/mnt/d/dev2/puzzletutorial/tests/CollaborativePuzzle.Tests/CollaborativePuzzle.Tests.csproj",
   "expectedPackageFiles": [
@@ -97,7 +97,7 @@
     "/home/ted/.nuget/packages/microsoft.extensions.options/8.0.0/microsoft.extensions.options.8.0.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.extensions.options.configurationextensions/8.0.0/microsoft.extensions.options.configurationextensions.8.0.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.extensions.primitives/8.0.0/microsoft.extensions.primitives.8.0.0.nupkg.sha512",
-    "/home/ted/.nuget/packages/microsoft.identity.client/4.66.1/microsoft.identity.client.4.66.1.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.identity.client/4.74.1/microsoft.identity.client.4.74.1.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.identity.client.extensions.msal/4.66.1/microsoft.identity.client.extensions.msal.4.66.1.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.identitymodel.abstractions/8.2.1/microsoft.identitymodel.abstractions.8.2.1.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.identitymodel.jsonwebtokens/8.2.1/microsoft.identitymodel.jsonwebtokens.8.2.1.nupkg.sha512",

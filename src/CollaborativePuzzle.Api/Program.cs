@@ -154,6 +154,7 @@ app.MapPuzzleEndpoints(versionSet);
 app.MapSessionEndpoints(versionSet);
 app.MapAuthEndpoints(versionSet);
 app.MapRateLimitEndpoints();
+app.MapOAuth2Endpoints();
 
 // Map HTTP/3 demo endpoints
 app.MapHttp3Endpoints();
