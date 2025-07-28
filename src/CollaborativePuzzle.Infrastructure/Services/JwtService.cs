@@ -29,7 +29,7 @@ public class JwtService : IJwtService
         _tokenHandler = new JwtSecurityTokenHandler();
     }
 
-    public string GenerateToken(User user, IEnumerable<string> roles)
+    public string GenerateToken(User user, params string[] roles)
     {
         var claims = new List<Claim>
         {
@@ -129,7 +129,7 @@ public class JwtService : IJwtService
             }
 
             var user = new User { Id = userId, Username = username, Email = email };
-            var newToken = GenerateToken(user, roles);
+            var newToken = GenerateToken(user, roles.ToArray());
 
             return RefreshTokenResult.Success(newToken);
         }

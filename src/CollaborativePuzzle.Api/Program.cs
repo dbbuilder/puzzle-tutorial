@@ -119,7 +119,7 @@ app.UseAuthentication();
 app.UseApiKeyAuthentication(); // Add API key authentication
 app.UseAuthorization();
 
-// Map traditional endpoints
+// Map traditional endpoints (will be deprecated)
 app.MapControllers();
 app.MapHub<TestPuzzleHub>("/puzzlehub");
 app.MapHub<CollaborativePuzzle.Api.WebRTC.WebRTCHub>("/webrtchub");
@@ -127,5 +127,10 @@ app.MapHub<CollaborativePuzzle.Api.SocketIO.SocketIOHub>("/socketiohub");
 
 // Map Minimal APIs with OpenAPI/Swagger
 SimpleMinimalApiEndpoints.MapMinimalApis(app);
+
+// Map new Minimal API endpoints
+app.MapPuzzleEndpoints();
+app.MapSessionEndpoints();
+app.MapAuthEndpoints();
 
 app.Run();

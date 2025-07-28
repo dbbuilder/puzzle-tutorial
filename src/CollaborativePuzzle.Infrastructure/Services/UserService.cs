@@ -6,7 +6,6 @@ using CollaborativePuzzle.Core.Models;
 using CollaborativePuzzle.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using User = CollaborativePuzzle.Core.Models.User;
 
 namespace CollaborativePuzzle.Infrastructure.Services;
 

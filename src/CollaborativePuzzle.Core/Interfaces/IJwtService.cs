@@ -11,7 +11,7 @@ public interface IJwtService
     /// <summary>
     /// Generates a JWT token for the specified user with roles
     /// </summary>
-    string GenerateToken(User user, IEnumerable<string> roles);
+    string GenerateToken(User user, params string[] roles);
     
     /// <summary>
     /// Validates a JWT token and returns the result
