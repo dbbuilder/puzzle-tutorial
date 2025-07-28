@@ -124,7 +124,7 @@ public static class AuthEndpoints
                 Id = result.User.Id,
                 Username = result.User.Username,
                 Email = result.User.Email,
-                Roles = result.Roles.ToArray()
+                Roles = result.Roles.ToArray().ToArray()
             }
         });
     }
@@ -215,7 +215,7 @@ public static class AuthEndpoints
             return TypedResults.Unauthorized();
         }
         
-        var roles = await userService.GetUserRolesAsync(userId);
+        var roles = await userService.GetUserRolesAsync(userIdClaim);
         
         return TypedResults.Ok(new UserDto
         {
@@ -265,7 +265,7 @@ public static class AuthEndpoints
                     Id = result.User!.Id,
                     Username = result.User.Username,
                     Email = result.User.Email,
-                    Roles = result.Roles
+                    Roles = result.Roles.ToArray()
                 }
             });
         }
@@ -302,7 +302,7 @@ public static class AuthEndpoints
                     Id = result.User!.Id,
                     Username = result.User.Username,
                     Email = result.User.Email,
-                    Roles = result.Roles
+                    Roles = result.Roles.ToArray()
                 }
             });
         }
@@ -313,7 +313,7 @@ public static class AuthEndpoints
         }
     }
 
-    private static Ok<object> GetB2CLoginUrl(
+    private static IResult GetB2CLoginUrl(
         [FromQuery] string redirectUri,
         [FromQuery] string? state,
         IExternalAuthenticationService authService = null!)
@@ -322,7 +322,7 @@ public static class AuthEndpoints
         return TypedResults.Ok(new { loginUrl });
     }
 
-    private static Ok<object> GetB2CLogoutUrl(
+    private static IResult GetB2CLogoutUrl(
         [FromQuery] string redirectUri,
         IExternalAuthenticationService authService = null!)
     {

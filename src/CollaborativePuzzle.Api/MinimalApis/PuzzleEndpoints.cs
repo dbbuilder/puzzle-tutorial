@@ -148,21 +148,15 @@ public static class PuzzleEndpoints
             });
         }
         
-        // Parse difficulty enum
-        if (!Enum.TryParse<PuzzleDifficulty>(request.Difficulty, true, out var difficulty))
-        {
-            difficulty = PuzzleDifficulty.Medium;
-        }
-        
         var puzzle = new Puzzle
         {
             Title = request.Title,
             Description = request.Description,
             PieceCount = request.PieceCount,
-            Difficulty = difficulty,
+            Difficulty = PuzzleDifficulty.Medium, // Default difficulty
             ImageUrl = request.ImageUrl,
             CreatedByUserId = Guid.Parse(userId),
-            IsPublic = request.IsPublic ?? true
+            IsPublic = request.IsPublic
         };
         
         // Generate puzzle pieces (simplified for now)
@@ -215,7 +209,7 @@ public static class PuzzleEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<Results<NoContent, NotFound, ForbidHttpResult>> DeletePuzzleAsync(
+    private static async Task<Results<NoContent, NotFound, ForbidHttpResult, BadRequest<ValidationProblemDetails>>> DeletePuzzleAsync(
         Guid id,
         ClaimsPrincipal user,
         IPuzzleRepository puzzleRepository = null!,
@@ -262,7 +256,7 @@ public static class PuzzleEndpoints
         
         var response = new SessionListResponse
         {
-            Sessions = sessions.Select(s => new SessionDto
+            Sessions = sessions.Select(s => new Core.DTOs.SessionDto
             {
                 Id = s.Id,
                 PuzzleId = s.PuzzleId,
@@ -270,7 +264,7 @@ public static class PuzzleEndpoints
                 JoinCode = s.JoinCode,
                 IsPublic = s.IsPublic,
                 MaxParticipants = s.MaxParticipants,
-                CurrentParticipants = s.CurrentParticipants,
+                CurrentParticipants = s.Participants?.Count ?? 0,
                 Status = s.Status.ToString(),
                 CreatedAt = s.CreatedAt
             })
@@ -351,10 +345,8 @@ public static class PuzzleEndpoints
             IsPublic = puzzle.IsPublic,
             CreatedByUserId = puzzle.CreatedByUserId,
             CreatedAt = puzzle.CreatedAt,
-            UpdatedAt = puzzle.UpdatedAt,
             TotalSessions = puzzle.TotalSessions,
-            TotalCompletions = puzzle.TotalCompletions,
-            AverageCompletionTime = puzzle.AverageCompletionTime
+            TotalCompletions = puzzle.TotalCompletions
         };
     }
 
@@ -374,11 +366,15 @@ public static class PuzzleEndpoints
                     Id = Guid.NewGuid(),
                     PuzzleId = puzzleId,
                     PieceNumber = row * cols + col,
+                    GridX = col,
+                    GridY = row,
                     CorrectX = col * 100,
                     CorrectY = row * 100,
-                    Width = 100,
-                    Height = 100,
-                    ImageUrl = $"/api/pieces/{puzzleId}/{row}_{col}.jpg"
+                    ImageX = col * 100,
+                    ImageY = row * 100,
+                    ImageWidth = 100,
+                    ImageHeight = 100,
+                    ShapeData = "{}" // Placeholder for shape data
                 });
             }
         }

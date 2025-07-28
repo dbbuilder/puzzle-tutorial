@@ -38,7 +38,7 @@ public class AuthController : ControllerBase
                 });
             }
 
-            var token = _jwtService.GenerateToken(authResult.User!, authResult.Roles);
+            var token = _jwtService.GenerateToken(authResult.User!, authResult.Roles.ToArray());
             
             _logger.LogInformation("User {Username} logged in successfully", request.Username);
             
@@ -51,7 +51,7 @@ public class AuthController : ControllerBase
                     Id = authResult.User!.Id,
                     Username = authResult.User.Username,
                     Email = authResult.User.Email,
-                    Roles = authResult.Roles
+                    Roles = authResult.Roles.ToArray()
                 }
             });
         }

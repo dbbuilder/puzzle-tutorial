@@ -103,7 +103,7 @@ public class AzureAdB2CAuthenticationService : IExternalAuthenticationService
             var roles = await _userService.GetUserRolesAsync(userId);
             
             // Generate our internal JWT token
-            var internalToken = _jwtService.GenerateToken(existingUser!, roles);
+            var internalToken = _jwtService.GenerateToken(existingUser!, roles.ToArray());
             
             return ExternalAuthenticationResult.CreateSuccess(existingUser!, internalToken, roles);
         }

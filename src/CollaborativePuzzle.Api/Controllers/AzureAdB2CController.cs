@@ -55,7 +55,7 @@ public class AzureAdB2CController : ControllerBase
                     Id = result.User!.Id,
                     Username = result.User.Username,
                     Email = result.User.Email,
-                    Roles = result.Roles
+                    Roles = result.Roles.ToArray()
                 }
             });
         }
@@ -102,7 +102,7 @@ public class AzureAdB2CController : ControllerBase
                     Id = result.User!.Id,
                     Username = result.User.Username,
                     Email = result.User.Email,
-                    Roles = result.Roles
+                    Roles = result.Roles.ToArray()
                 }
             });
         }

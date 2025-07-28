@@ -239,7 +239,7 @@ public static class SessionEndpoints
         }
         
         // Check max participants
-        if (session.CurrentParticipants >= session.MaxParticipants)
+        if (session.Participants?.Count >= session.MaxParticipants)
         {
             return TypedResults.BadRequest(new ValidationProblemDetails
             {
@@ -306,7 +306,7 @@ public static class SessionEndpoints
             session.Name = request.Name;
         if (request.IsPublic.HasValue)
             session.IsPublic = request.IsPublic.Value;
-        if (request.MaxParticipants.HasValue && request.MaxParticipants.Value >= session.CurrentParticipants)
+        if (request.MaxParticipants.HasValue && request.MaxParticipants.Value >= (session.Participants?.Count ?? 0))
             session.MaxParticipants = request.MaxParticipants.Value;
         
         await sessionRepository.UpdateSessionAsync(session);
@@ -411,7 +411,7 @@ public static class SessionEndpoints
             JoinCode = session.JoinCode,
             IsPublic = session.IsPublic,
             MaxParticipants = session.MaxParticipants,
-            CurrentParticipants = session.CurrentParticipants,
+            CurrentParticipants = session.Participants?.Count ?? 0,
             Status = session.Status.ToString(),
             CreatedAt = session.CreatedAt
         };
@@ -429,7 +429,7 @@ public static class SessionEndpoints
             JoinCode = session.JoinCode,
             IsPublic = session.IsPublic,
             MaxParticipants = session.MaxParticipants,
-            CurrentParticipants = session.CurrentParticipants,
+            CurrentParticipants = session.Participants?.Count ?? 0,
             Status = session.Status.ToString(),
             CreatedByUserId = session.CreatedByUserId,
             CreatedAt = session.CreatedAt,
@@ -444,9 +444,10 @@ public static class SessionEndpoints
     private static string GenerateJoinCode()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        var random = new Random();
-        return new string(Enumerable.Repeat(chars, 6)
-            .Select(s => s[random.Next(s.Length)]).ToArray());
+        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        var bytes = new byte[6];
+        rng.GetBytes(bytes);
+        return new string(bytes.Select(b => chars[b % chars.Length]).ToArray());
     }
 }
 
