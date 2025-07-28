@@ -203,6 +203,7 @@ public class ApiKeyController : ControllerBase
         {
             scopes = ApiScopes.AllScopes,
             defaultScopes = ApiScopes.DefaultScopes,
+            hierarchicalScopes = ApiScopes.ScopeHierarchy.Keys,
             descriptions = new
             {
                 read_puzzles = "Read access to puzzles",
@@ -211,8 +212,99 @@ public class ApiKeyController : ControllerBase
                 read_sessions = "Read access to puzzle sessions",
                 write_sessions = "Create and update sessions",
                 admin_users = "Administer users",
-                admin_system = "System administration"
+                admin_system = "System administration",
+                puzzles_all = "All puzzle permissions",
+                sessions_all = "All session permissions",
+                admin_all = "All admin permissions"
             }
         });
+    }
+    
+    /// <summary>
+    /// Rotate an API key
+    /// </summary>
+    [HttpPost("{keyId}/rotate")]
+    [ProducesResponseType(typeof(RotateApiKeyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RotateApiKey(string keyId, [FromBody] RotateApiKeyRequest request)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+        
+        try
+        {
+            var rotatedKey = await _apiKeyService.RotateApiKeyAsync(keyId, userId);
+            
+            var response = new RotateApiKeyResponse
+            {
+                Id = rotatedKey.Id,
+                Key = rotatedKey.Key!,
+                Name = rotatedKey.Name,
+                Scopes = rotatedKey.Scopes,
+                ExpiresAt = rotatedKey.ExpiresAt,
+                CreatedAt = rotatedKey.CreatedAt,
+                RotatedFromKeyId = rotatedKey.RotatedFromKeyId!
+            };
+            
+            _logger.LogInformation("API key {KeyId} rotated by user {UserId}", keyId, userId);
+            
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound(new { error = "API key not found or unauthorized" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error rotating API key {KeyId} for user {UserId}", keyId, userId);
+            return StatusCode(500, new { error = "Failed to rotate API key" });
+        }
+    }
+    
+    /// <summary>
+    /// Get usage statistics for an API key
+    /// </summary>
+    [HttpGet("{keyId}/usage")]
+    [ProducesResponseType(typeof(ApiKeyUsageStatsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetApiKeyUsage(string keyId)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+        
+        try
+        {
+            // Verify ownership
+            var keys = await _apiKeyService.GetUserApiKeysAsync(userId);
+            if (!keys.Any(k => k.Id == keyId))
+            {
+                return NotFound(new { error = "API key not found" });
+            }
+            
+            var stats = await _apiKeyService.GetApiKeyUsageStatsAsync(keyId);
+            
+            var response = new ApiKeyUsageStatsResponse
+            {
+                TotalRequests = stats.TotalRequests,
+                EndpointUsage = stats.EndpointUsage,
+                StatusCodeDistribution = stats.StatusCodeDistribution,
+                FirstUsed = stats.FirstUsed,
+                LastUsed = stats.LastUsed,
+                AverageResponseTimeMs = stats.AverageResponseTimeMs
+            };
+            
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting usage stats for API key {KeyId}", keyId);
+            return StatusCode(500, new { error = "Failed to get API key usage statistics" });
+        }
     }
 }

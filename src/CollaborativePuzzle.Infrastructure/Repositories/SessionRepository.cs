@@ -2,201 +2,394 @@ using CollaborativePuzzle.Core.Entities;
 using CollaborativePuzzle.Core.Interfaces;
 using CollaborativePuzzle.Core.Enums;
 using CollaborativePuzzle.Core.Models;
+using CollaborativePuzzle.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CollaborativePuzzle.Infrastructure.Repositories
 {
+    /// <summary>
+    /// Entity Framework implementation of ISessionRepository
+    /// </summary>
     public class SessionRepository : ISessionRepository
     {
-        private static readonly List<PuzzleSession> _sessions = new();
-        private static readonly List<SessionParticipant> _participants = new();
-        private static readonly List<ChatMessage> _messages = new();
-        // TODO: Implement with Entity Framework
-        
-        public Task<PuzzleSession?> GetSessionAsync(Guid sessionId)
+        private readonly PuzzleDbContext _context;
+        private readonly ILogger<SessionRepository> _logger;
+
+        public SessionRepository(PuzzleDbContext context, ILogger<SessionRepository> logger)
         {
-            return Task.FromResult<PuzzleSession?>(null);
+            _context = context;
+            _logger = logger;
         }
 
-        public Task<PuzzleSession> CreateSessionAsync(PuzzleSession session)
+        public async Task<PuzzleSession?> GetSessionAsync(Guid sessionId)
         {
-            session.Id = Guid.NewGuid();
-            session.JoinCode = GenerateJoinCode();
-            session.CreatedAt = DateTime.UtcNow;
-            session.LastActivityAt = DateTime.UtcNow;
-            _sessions.Add(session);
-            return Task.FromResult(session);
+            return await _context.PuzzleSessions
+                .Include(s => s.Puzzle)
+                .Include(s => s.CreatedByUser)
+                .FirstOrDefaultAsync(s => s.Id == sessionId);
         }
 
-        public Task<PuzzleSession?> GetSessionByIdAsync(Guid sessionId)
+        public async Task<PuzzleSession> CreateSessionAsync(PuzzleSession session)
         {
-            return Task.FromResult(GetSessionAsync(sessionId).Result);
-        }
-
-        public Task<PuzzleSession?> GetSessionByJoinCodeAsync(string joinCode)
-        {
-            var session = _sessions.FirstOrDefault(s => s.JoinCode == joinCode);
-            return Task.FromResult(session);
-        }
-
-        public Task<PuzzleSession?> GetSessionWithParticipantsAsync(Guid sessionId)
-        {
-            var session = _sessions.FirstOrDefault(s => s.Id == sessionId);
-            if (session != null)
+            try
             {
-                session.Participants = _participants.Where(p => p.SessionId == sessionId).ToList();
+                if (string.IsNullOrEmpty(session.JoinCode))
+                {
+                    session.JoinCode = GenerateJoinCode();
+                }
+                
+                _context.PuzzleSessions.Add(session);
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Created session {SessionId} for puzzle {PuzzleId}", 
+                    session.Id, session.PuzzleId);
+                
+                return session;
             }
-            return Task.FromResult(session);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating session for puzzle {PuzzleId}", session.PuzzleId);
+                throw;
+            }
         }
 
-        public Task<IEnumerable<PuzzleSession>> GetActiveSessionsForPuzzleAsync(Guid puzzleId)
+        public async Task<PuzzleSession?> GetSessionByIdAsync(Guid sessionId)
         {
-            var sessions = _sessions.Where(s => s.PuzzleId == puzzleId && s.Status == SessionStatus.Active);
-            return Task.FromResult(sessions);
+            // Legacy method support - delegates to GetSessionAsync
+            return await GetSessionAsync(sessionId);
         }
 
-        public Task<IEnumerable<PuzzleSession>> GetPublicSessionsAsync(int skip, int take)
+        public async Task<PuzzleSession?> GetSessionByJoinCodeAsync(string joinCode)
         {
-            var sessions = _sessions
+            return await _context.PuzzleSessions
+                .Include(s => s.Puzzle)
+                .Include(s => s.CreatedByUser)
+                .FirstOrDefaultAsync(s => s.JoinCode == joinCode && s.Status == SessionStatus.Active);
+        }
+
+        public async Task<PuzzleSession?> GetSessionWithParticipantsAsync(Guid sessionId)
+        {
+            return await _context.PuzzleSessions
+                .Include(s => s.Puzzle)
+                .Include(s => s.CreatedByUser)
+                .Include(s => s.Participants)
+                    .ThenInclude(p => p.User)
+                .FirstOrDefaultAsync(s => s.Id == sessionId);
+        }
+
+        public async Task<IEnumerable<PuzzleSession>> GetActiveSessionsForPuzzleAsync(Guid puzzleId)
+        {
+            return await _context.PuzzleSessions
+                .Where(s => s.PuzzleId == puzzleId && s.Status == SessionStatus.Active)
+                .Include(s => s.CreatedByUser)
+                .OrderByDescending(s => s.LastActivityAt)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<PuzzleSession>> GetPublicSessionsAsync(int skip, int take)
+        {
+            return await _context.PuzzleSessions
                 .Where(s => s.IsPublic && s.Status == SessionStatus.Active)
+                .Include(s => s.Puzzle)
+                .Include(s => s.CreatedByUser)
+                .OrderByDescending(s => s.LastActivityAt)
                 .Skip(skip)
-                .Take(take);
-            return Task.FromResult(sessions);
+                .Take(take)
+                .ToListAsync();
         }
 
-        public Task<bool> UpdateSessionAsync(PuzzleSession session)
+        public async Task<bool> UpdateSessionAsync(PuzzleSession session)
         {
-            var existing = _sessions.FirstOrDefault(s => s.Id == session.Id);
-            if (existing != null)
+            try
             {
-                existing.Name = session.Name;
-                existing.Status = session.Status;
-                existing.IsPublic = session.IsPublic;
-                existing.MaxParticipants = session.MaxParticipants;
-                existing.CompletedPieces = session.CompletedPieces;
-                existing.CompletionPercentage = session.CompletionPercentage;
-                existing.LastActivityAt = DateTime.UtcNow;
-                return Task.FromResult(true);
+                _context.PuzzleSessions.Update(session);
+                session.LastActivityAt = DateTime.UtcNow;
+                
+                var result = await _context.SaveChangesAsync();
+                return result > 0;
             }
-            return Task.FromResult(false);
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrency conflict updating session {SessionId}", session.Id);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating session {SessionId}", session.Id);
+                throw;
+            }
         }
 
-        public Task<bool> UpdateSessionProgressAsync(Guid sessionId, int completedPieces, decimal completionPercentage)
+        public async Task<bool> UpdateSessionProgressAsync(Guid sessionId, int completedPieces, decimal completionPercentage)
         {
-            var session = _sessions.FirstOrDefault(s => s.Id == sessionId);
-            if (session != null)
+            try
             {
+                var session = await _context.PuzzleSessions.FindAsync(sessionId);
+                if (session == null)
+                {
+                    _logger.LogWarning("Session {SessionId} not found for progress update", sessionId);
+                    return false;
+                }
+
                 session.CompletedPieces = completedPieces;
                 session.CompletionPercentage = completionPercentage;
                 session.LastActivityAt = DateTime.UtcNow;
-                return Task.FromResult(true);
-            }
-            return Task.FromResult(false);
-        }
 
-        public Task<bool> DeleteSessionAsync(Guid sessionId)
-        {
-            var session = _sessions.FirstOrDefault(s => s.Id == sessionId);
-            if (session != null)
+                if (completionPercentage >= 100)
+                {
+                    session.Status = SessionStatus.Completed;
+                    session.CompletedAt = DateTime.UtcNow;
+                }
+
+                var result = await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Updated progress for session {SessionId}: {CompletedPieces} pieces ({Percentage}%)",
+                    sessionId, completedPieces, completionPercentage);
+                
+                return result > 0;
+            }
+            catch (Exception ex)
             {
-                _sessions.Remove(session);
-                _participants.RemoveAll(p => p.SessionId == sessionId);
-                _messages.RemoveAll(m => m.SessionId == sessionId);
-                return Task.FromResult(true);
+                _logger.LogError(ex, "Error updating progress for session {SessionId}", sessionId);
+                throw;
             }
-            return Task.FromResult(false);
         }
 
-        public Task<bool> UpdateSessionStatusAsync(Guid sessionId, SessionStatus status)
+        public async Task<bool> DeleteSessionAsync(Guid sessionId)
         {
-            var session = _sessions.FirstOrDefault(s => s.Id == sessionId);
+            try
+            {
+                var session = await _context.PuzzleSessions
+                    .Include(s => s.Participants)
+                    .Include(s => s.ChatMessages)
+                    .FirstOrDefaultAsync(s => s.Id == sessionId);
+
+                if (session == null)
+                {
+                    return false;
+                }
+
+                // Remove related entities first
+                _context.SessionParticipants.RemoveRange(session.Participants);
+                _context.ChatMessages.RemoveRange(session.ChatMessages);
+                _context.PuzzleSessions.Remove(session);
+
+                var result = await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Deleted session {SessionId}", sessionId);
+                
+                return result > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting session {SessionId}", sessionId);
+                throw;
+            }
+        }
+
+        public async Task<bool> UpdateSessionStatusAsync(Guid sessionId, SessionStatus status)
+        {
+            var session = await _context.PuzzleSessions.FindAsync(sessionId);
             if (session != null)
             {
                 session.Status = status;
                 session.LastActivityAt = DateTime.UtcNow;
-                return Task.FromResult(true);
+                var result = await _context.SaveChangesAsync();
+                return result > 0;
             }
-            return Task.FromResult(false);
+            return false;
         }
 
-        public Task<IEnumerable<PuzzleSession>> GetActiveSessionsAsync(int limit = 10)
+        public async Task<IEnumerable<PuzzleSession>> GetActiveSessionsAsync(int limit = 10)
         {
-            var sessions = _sessions
+            return await _context.PuzzleSessions
                 .Where(s => s.Status == SessionStatus.Active)
+                .Include(s => s.Puzzle)
+                .Include(s => s.CreatedByUser)
                 .OrderByDescending(s => s.LastActivityAt)
-                .Take(limit);
-            return Task.FromResult(sessions);
+                .Take(limit)
+                .ToListAsync();
         }
 
-        public Task<SessionParticipant> AddParticipantAsync(Guid sessionId, Guid userId, string? connectionId = null)
+        public async Task<SessionParticipant> AddParticipantAsync(Guid sessionId, Guid userId, string? connectionId = null)
         {
-            var participant = new SessionParticipant
+            try
             {
-                Id = Guid.NewGuid(),
-                SessionId = sessionId,
-                UserId = userId,
-                ConnectionId = connectionId,
-                JoinedAt = DateTime.UtcNow,
-                Status = ParticipantStatus.Active
-            };
-            _participants.Add(participant);
-            return Task.FromResult(participant);
+                // Check if participant already exists
+                var existing = await _context.SessionParticipants
+                    .FirstOrDefaultAsync(p => p.SessionId == sessionId && p.UserId == userId);
+
+                if (existing != null)
+                {
+                    // Update connection ID if provided
+                    if (!string.IsNullOrEmpty(connectionId))
+                    {
+                        existing.ConnectionId = connectionId;
+                        existing.Status = ParticipantStatus.Online;
+                        await _context.SaveChangesAsync();
+                    }
+                    return existing;
+                }
+
+                var participant = new SessionParticipant
+                {
+                    Id = Guid.NewGuid(),
+                    SessionId = sessionId,
+                    UserId = userId,
+                    ConnectionId = connectionId,
+                    JoinedAt = DateTime.UtcNow,
+                    Status = ParticipantStatus.Online
+                };
+
+                _context.SessionParticipants.Add(participant);
+                
+                // Update session activity
+                var session = await _context.PuzzleSessions.FindAsync(sessionId);
+                if (session != null)
+                {
+                    session.LastActivityAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("User {UserId} joined session {SessionId}", userId, sessionId);
+                
+                return participant;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding participant {UserId} to session {SessionId}", userId, sessionId);
+                throw;
+            }
         }
 
-        public Task<bool> RemoveParticipantAsync(Guid sessionId, Guid userId)
+        public async Task<bool> RemoveParticipantAsync(Guid sessionId, Guid userId)
         {
-            var removed = _participants.RemoveAll(p => p.SessionId == sessionId && p.UserId == userId);
-            return Task.FromResult(removed > 0);
+            try
+            {
+                var participant = await _context.SessionParticipants
+                    .FirstOrDefaultAsync(p => p.SessionId == sessionId && p.UserId == userId);
+
+                if (participant == null)
+                {
+                    return false;
+                }
+
+                _context.SessionParticipants.Remove(participant);
+                
+                // Update session activity
+                var session = await _context.PuzzleSessions.FindAsync(sessionId);
+                if (session != null)
+                {
+                    session.LastActivityAt = DateTime.UtcNow;
+                }
+
+                var result = await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("User {UserId} left session {SessionId}", userId, sessionId);
+                
+                return result > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing participant {UserId} from session {SessionId}", userId, sessionId);
+                throw;
+            }
         }
 
-        public Task<bool> UpdateParticipantStatusAsync(Guid sessionId, Guid userId, ParticipantStatus status)
+        public async Task<bool> UpdateParticipantStatusAsync(Guid sessionId, Guid userId, ParticipantStatus status)
         {
-            var participant = _participants.FirstOrDefault(p => p.SessionId == sessionId && p.UserId == userId);
+            var participant = await _context.SessionParticipants
+                .FirstOrDefaultAsync(p => p.SessionId == sessionId && p.UserId == userId);
+            
             if (participant != null)
             {
                 participant.Status = status;
-                return Task.FromResult(true);
+                var result = await _context.SaveChangesAsync();
+                return result > 0;
             }
-            return Task.FromResult(false);
+            return false;
         }
 
-        public Task<IEnumerable<SessionParticipant>> GetSessionParticipantsAsync(Guid sessionId)
+        public async Task<IEnumerable<SessionParticipant>> GetSessionParticipantsAsync(Guid sessionId)
         {
-            var participants = _participants.Where(p => p.SessionId == sessionId);
-            return Task.FromResult(participants);
+            return await _context.SessionParticipants
+                .Where(p => p.SessionId == sessionId)
+                .Include(p => p.User)
+                .OrderBy(p => p.JoinedAt)
+                .ToListAsync();
         }
 
-        public Task<SessionParticipant?> GetParticipantAsync(Guid sessionId, Guid userId)
+        public async Task<SessionParticipant?> GetParticipantAsync(Guid sessionId, Guid userId)
         {
-            var participant = _participants.FirstOrDefault(p => p.SessionId == sessionId && p.UserId == userId);
-            return Task.FromResult(participant);
+            return await _context.SessionParticipants
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.SessionId == sessionId && p.UserId == userId);
         }
 
-        public Task<ChatMessage> SaveChatMessageAsync(Guid sessionId, Guid userId, string message, MessageType messageType)
+        public async Task<ChatMessage> SaveChatMessageAsync(Guid sessionId, Guid userId, string message, MessageType messageType)
         {
-            var chatMessage = new ChatMessage
+            try
             {
-                Id = Guid.NewGuid(),
-                SessionId = sessionId,
-                UserId = userId,
-                Message = message,
-                Type = messageType,
-                CreatedAt = DateTime.UtcNow
-            };
-            _messages.Add(chatMessage);
-            return Task.FromResult(chatMessage);
+                var chatMessage = new ChatMessage
+                {
+                    Id = Guid.NewGuid(),
+                    SessionId = sessionId,
+                    UserId = userId,
+                    Message = message,
+                    Type = messageType,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.ChatMessages.Add(chatMessage);
+                
+                // Update session activity
+                var session = await _context.PuzzleSessions.FindAsync(sessionId);
+                if (session != null)
+                {
+                    session.LastActivityAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Saved {MessageType} message in session {SessionId}", messageType, sessionId);
+                
+                return chatMessage;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving chat message in session {SessionId}", sessionId);
+                throw;
+            }
         }
 
-        public Task<bool> CompleteSessionAsync(Guid sessionId)
+        public async Task<bool> CompleteSessionAsync(Guid sessionId)
         {
-            var session = _sessions.FirstOrDefault(s => s.Id == sessionId);
-            if (session != null)
+            try
             {
+                var session = await _context.PuzzleSessions.FindAsync(sessionId);
+                if (session == null)
+                {
+                    return false;
+                }
+
                 session.Status = SessionStatus.Completed;
                 session.CompletedAt = DateTime.UtcNow;
+                session.CompletionPercentage = 100;
                 session.LastActivityAt = DateTime.UtcNow;
-                return Task.FromResult(true);
+
+                var result = await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Completed session {SessionId}", sessionId);
+                
+                return result > 0;
             }
-            return Task.FromResult(false);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error completing session {SessionId}", sessionId);
+                throw;
+            }
         }
 
         private static string GenerateJoinCode()

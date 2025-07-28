@@ -448,6 +448,103 @@ namespace CollaborativePuzzle.Infrastructure.Services
         }
 
         /// <summary>
+        /// Increments a value in Redis
+        /// </summary>
+        public async Task<long> IncrementAsync(string key, long value = 1)
+        {
+            try
+            {
+                var fullKey = BuildKey(key);
+                var result = await _database.StringIncrementAsync(fullKey, value);
+                
+                _logger.LogDebug("Incremented Redis key {Key} by {Value}, new value: {Result}", fullKey, value, result);
+                return result;
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogError(ex, "Redis error incrementing key {Key}", key);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error incrementing Redis key {Key}", key);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Sets a string value in Redis
+        /// </summary>
+        public async Task<bool> StringSetAsync(string key, string value, TimeSpan? expiry = null)
+        {
+            return await SetStringAsync(key, value, expiry);
+        }
+
+        /// <summary>
+        /// Sets expiration time for a key
+        /// </summary>
+        public async Task<bool> KeyExpireAsync(string key, TimeSpan expiry)
+        {
+            return await ExpireAsync(key, expiry);
+        }
+
+        /// <summary>
+        /// Gets all keys matching a pattern
+        /// </summary>
+        public async Task<IEnumerable<string>> GetKeysAsync(string pattern)
+        {
+            try
+            {
+                var server = _connectionMultiplexer.GetServer(_connectionMultiplexer.GetEndPoints()[0]);
+                var keys = new List<string>();
+                
+                await foreach (var key in server.KeysAsync(pattern: pattern))
+                {
+                    keys.Add(key.ToString());
+                }
+                
+                _logger.LogDebug("Found {Count} keys matching pattern {Pattern}", keys.Count, pattern);
+                return keys;
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogError(ex, "Redis error getting keys with pattern {Pattern}", pattern);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting Redis keys with pattern {Pattern}", pattern);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Gets the length of a sorted set within a score range
+        /// </summary>
+        public async Task<long> SortedSetLengthAsync(string key, double min, double max)
+        {
+            try
+            {
+                var fullKey = BuildKey(key);
+                var length = await _database.SortedSetLengthAsync(fullKey, min, max);
+                
+                _logger.LogDebug("Sorted set {Key} has {Length} elements between {Min} and {Max}", 
+                    fullKey, length, min, max);
+                return length;
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogError(ex, "Redis error getting sorted set length for {Key}", key);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting Redis sorted set length for {Key}", key);
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Get multiple keys in a single operation
         /// </summary>
         public async Task<IDictionary<string, string?>> GetMultipleAsync(IEnumerable<string> keys)

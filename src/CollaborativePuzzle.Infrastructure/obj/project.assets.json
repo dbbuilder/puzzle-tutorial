@@ -10438,6 +10438,8 @@
           }
         },
         "centralPackageVersions": {
+          "Asp.Versioning.Mvc": "[8.1.0, )",
+          "Asp.Versioning.Mvc.ApiExplorer": "[8.1.0, )",
           "AspNetCore.HealthChecks.AzureStorage": "[8.0.1, )",
           "AspNetCore.HealthChecks.Redis": "[8.0.1, )",
           "AspNetCore.HealthChecks.SqlServer": "[8.0.2, )",

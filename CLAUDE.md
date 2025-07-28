@@ -130,12 +130,24 @@ When developing in WSL connecting to Windows SQL Server:
 - Cursor updates throttled to 10/second using Channels
 - Connection tracking in Redis for resilience
 
-### Testing Approach
-- TDD methodology with tests written first
+### Testing Approach (TDD MANDATORY)
+- **TDD methodology is MANDATORY** - tests MUST be written BEFORE implementation
+- When creating TODO lists, ALWAYS place test tasks BEFORE implementation tasks
+- Follow the TDD cycle: Red → Green → Refactor
+  1. RED: Write failing tests first that define expected behavior
+  2. GREEN: Write minimal code to make tests pass
+  3. REFACTOR: Improve code while keeping tests green
 - Unit tests use Moq for dependencies
 - Integration tests use TestContainers
 - Test base classes in `TestBase` folder
 - Fluent test data builders for readability
+
+**CRITICAL TODO ORDERING**: When adding tasks to TODO lists:
+1. Interface/contract definition (if needed)
+2. Test creation (MUST come before implementation)
+3. Implementation
+4. Integration/wiring
+Example: "Write tests for X" MUST come before "Implement X"
 
 ### Code Quality
 - StyleCop and SonarAnalyzer enforced
@@ -164,3 +176,21 @@ When developing in WSL connecting to Windows SQL Server:
 ### Documentation
 - `docs/TDD_GUIDE.md` - Test-driven development practices
 - `docs/SECRETS_MANAGEMENT.md` - Secrets and configuration guide
+- `docs/Development_Standards_Naming_References.md` - **CRITICAL: Naming conventions and common issue prevention**
+
+## Critical Development Standards
+
+**IMPORTANT**: Always consult `docs/Development_Standards_Naming_References.md` BEFORE implementing any feature to prevent common naming conflicts and reference issues. This document contains:
+- Solutions for duplicate model names (User model conflicts)
+- Property naming conventions and common mismatches
+- Interface implementation checklist
+- Type conversion standards
+- Dependency injection patterns
+- Pre-development checklist to prevent errors
+
+Key reminders:
+- ALWAYS check actual entity definitions - don't assume property names
+- Use explicit type conversions (no implicit decimal to double)
+- Never use internal types (like Program) as generic parameters
+- Handle nullable references with ?? operator
+- Update ALL implementations when changing interfaces

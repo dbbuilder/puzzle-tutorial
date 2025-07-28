@@ -122,5 +122,55 @@ namespace CollaborativePuzzle.Infrastructure.Services
             var json = JsonSerializer.Serialize(message);
             await PublishAsync(channel, json);
         }
+
+        public Task<long> IncrementAsync(string key, long value = 1)
+        {
+            var currentValue = 0L;
+            if (_cache.TryGetValue(key, out var item))
+            {
+                if (long.TryParse(item.value, out var parsed))
+                {
+                    currentValue = parsed;
+                }
+            }
+            
+            var newValue = currentValue + value;
+            _cache[key] = (newValue.ToString(), null);
+            return Task.FromResult(newValue);
+        }
+
+        public Task<bool> StringSetAsync(string key, string value, TimeSpan? expiry = null)
+        {
+            return SetStringAsync(key, value, expiry);
+        }
+
+        public Task<bool> KeyExpireAsync(string key, TimeSpan expiry)
+        {
+            return ExpireAsync(key, expiry);
+        }
+
+        public Task<IEnumerable<string>> GetKeysAsync(string pattern)
+        {
+            // Simple pattern matching for testing
+            var regex = new System.Text.RegularExpressions.Regex(
+                "^" + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("\\*", ".*") + "$");
+            
+            var keys = _cache.Keys.Where(k => regex.IsMatch(k));
+            return Task.FromResult(keys.AsEnumerable());
+        }
+
+        public Task<long> SortedSetLengthAsync(string key, double min, double max)
+        {
+            // Simplified implementation for testing
+            if (_cache.TryGetValue(key, out var item))
+            {
+                // Assume the value is a count for testing purposes
+                if (long.TryParse(item.value, out var count))
+                {
+                    return Task.FromResult(count);
+                }
+            }
+            return Task.FromResult(0L);
+        }
     }
 }

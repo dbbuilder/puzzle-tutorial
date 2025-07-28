@@ -41,4 +41,50 @@ public interface IApiKeyRepository
     /// Deletes an API key
     /// </summary>
     Task<bool> DeleteApiKeyAsync(string keyId);
+    
+    // Enhanced features
+    
+    /// <summary>
+    /// Gets an API key by ID (includes userId check)
+    /// </summary>
+    Task<ApiKey?> GetByIdAsync(string keyId);
+    
+    /// <summary>
+    /// Gets an API key by the actual key value
+    /// </summary>
+    Task<ApiKey?> GetByKeyAsync(string key);
+    
+    /// <summary>
+    /// Creates a new API key in the repository
+    /// </summary>
+    Task<ApiKey> CreateAsync(ApiKey apiKey);
+    
+    /// <summary>
+    /// Updates an existing API key
+    /// </summary>
+    Task<ApiKey> UpdateAsync(ApiKey apiKey);
+    
+    /// <summary>
+    /// Gets an API key template
+    /// </summary>
+    Task<ApiKeyTemplate> GetTemplateAsync(string templateId);
+    
+    /// <summary>
+    /// Gets all available API key templates
+    /// </summary>
+    Task<IEnumerable<ApiKeyTemplate>> GetTemplatesAsync();
+}
+
+/// <summary>
+/// API key template for creating standardized keys
+/// </summary>
+public class ApiKeyTemplate
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string[] Scopes { get; set; } = Array.Empty<string>();
+    public string RateLimitTier { get; set; } = "basic";
+    public int DefaultExpiryDays { get; set; } = 30;
+    public Dictionary<string, object>? DefaultMetadata { get; set; }
 }

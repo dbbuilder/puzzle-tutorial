@@ -49,6 +49,16 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "Asp.Versioning.Mvc": {
+              "target": "Package",
+              "version": "[8.1.0, )",
+              "versionCentrallyManaged": true
+            },
+            "Asp.Versioning.Mvc.ApiExplorer": {
+              "target": "Package",
+              "version": "[8.1.0, )",
+              "versionCentrallyManaged": true
+            },
             "AspNetCore.HealthChecks.Redis": {
               "target": "Package",
               "version": "[8.0.1, )",
@@ -95,6 +105,11 @@
               "versionCentrallyManaged": true
             },
             "Microsoft.AspNetCore.OpenApi": {
+              "target": "Package",
+              "version": "[8.0.0, )",
+              "versionCentrallyManaged": true
+            },
+            "Microsoft.AspNetCore.SignalR.StackExchangeRedis": {
               "target": "Package",
               "version": "[8.0.0, )",
               "versionCentrallyManaged": true
@@ -164,6 +179,8 @@
             }
           },
           "centralPackageVersions": {
+            "Asp.Versioning.Mvc": "[8.1.0, )",
+            "Asp.Versioning.Mvc.ApiExplorer": "[8.1.0, )",
             "AspNetCore.HealthChecks.AzureStorage": "[8.0.1, )",
             "AspNetCore.HealthChecks.Redis": "[8.0.1, )",
             "AspNetCore.HealthChecks.SqlServer": "[8.0.2, )",
@@ -360,6 +377,8 @@
             }
           },
           "centralPackageVersions": {
+            "Asp.Versioning.Mvc": "[8.1.0, )",
+            "Asp.Versioning.Mvc.ApiExplorer": "[8.1.0, )",
             "AspNetCore.HealthChecks.AzureStorage": "[8.0.1, )",
             "AspNetCore.HealthChecks.Redis": "[8.0.1, )",
             "AspNetCore.HealthChecks.SqlServer": "[8.0.2, )",
@@ -577,6 +596,8 @@
             }
           },
           "centralPackageVersions": {
+            "Asp.Versioning.Mvc": "[8.1.0, )",
+            "Asp.Versioning.Mvc.ApiExplorer": "[8.1.0, )",
             "AspNetCore.HealthChecks.AzureStorage": "[8.0.1, )",
             "AspNetCore.HealthChecks.Redis": "[8.0.1, )",
             "AspNetCore.HealthChecks.SqlServer": "[8.0.2, )",
@@ -831,6 +852,8 @@
             }
           },
           "centralPackageVersions": {
+            "Asp.Versioning.Mvc": "[8.1.0, )",
+            "Asp.Versioning.Mvc.ApiExplorer": "[8.1.0, )",
             "AspNetCore.HealthChecks.AzureStorage": "[8.0.1, )",
             "AspNetCore.HealthChecks.Redis": "[8.0.1, )",
             "AspNetCore.HealthChecks.SqlServer": "[8.0.2, )",
@@ -1078,6 +1101,8 @@
             }
           },
           "centralPackageVersions": {
+            "Asp.Versioning.Mvc": "[8.1.0, )",
+            "Asp.Versioning.Mvc.ApiExplorer": "[8.1.0, )",
             "AspNetCore.HealthChecks.AzureStorage": "[8.0.1, )",
             "AspNetCore.HealthChecks.Redis": "[8.0.1, )",
             "AspNetCore.HealthChecks.SqlServer": "[8.0.2, )",

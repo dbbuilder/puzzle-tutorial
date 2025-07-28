@@ -1,9 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "9EdtWHSaqnP9XB+NywplFsltB6KoA3D0uBSHXz1jqyTZjZHc25vquSY/32XAGOQBYMdabocgFiQrcsejFbu7Jg==",
+  "dgSpecHash": "4Hls2inwCUlar3+HrvjI1miAEHQrIVsp+mV5Pel8IqlP0kYo/StUOj99f7RR5s6kxQ9sTmDZZ5SYE+S1dd+EdA==",
   "success": true,
   "projectFilePath": "/mnt/d/dev2/puzzletutorial/src/CollaborativePuzzle.Api/CollaborativePuzzle.Api.csproj",
   "expectedPackageFiles": [
+    "/home/ted/.nuget/packages/asp.versioning.abstractions/8.1.0/asp.versioning.abstractions.8.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/asp.versioning.http/8.1.0/asp.versioning.http.8.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/asp.versioning.mvc/8.1.0/asp.versioning.mvc.8.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/asp.versioning.mvc.apiexplorer/8.1.0/asp.versioning.mvc.apiexplorer.8.1.0.nupkg.sha512",
     "/home/ted/.nuget/packages/aspnetcore.healthchecks.redis/8.0.1/aspnetcore.healthchecks.redis.8.0.1.nupkg.sha512",
     "/home/ted/.nuget/packages/azure.core/1.44.1/azure.core.1.44.1.nupkg.sha512",
     "/home/ted/.nuget/packages/azure.identity/1.13.1/azure.identity.1.13.1.nupkg.sha512",
@@ -39,6 +43,7 @@
     "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.common/1.1.0/microsoft.aspnetcore.signalr.common.1.1.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.core/1.1.0/microsoft.aspnetcore.signalr.core.1.1.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.protocols.json/1.1.0/microsoft.aspnetcore.signalr.protocols.json.1.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.stackexchangeredis/8.0.0/microsoft.aspnetcore.signalr.stackexchangeredis.8.0.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.websockets/2.2.0/microsoft.aspnetcore.websockets.2.2.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.webutilities/2.2.0/microsoft.aspnetcore.webutilities.2.2.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.bcl.asyncinterfaces/6.0.0/microsoft.bcl.asyncinterfaces.6.0.0.nupkg.sha512",

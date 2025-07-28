@@ -19,15 +19,18 @@ public class PuzzleController : ControllerBase
 {
     private readonly IPuzzleRepository _puzzleRepository;
     private readonly IPieceRepository _pieceRepository;
+    private readonly IPuzzleGeneratorService _puzzleGeneratorService;
     private readonly ILogger<PuzzleController> _logger;
 
     public PuzzleController(
         IPuzzleRepository puzzleRepository,
         IPieceRepository pieceRepository,
+        IPuzzleGeneratorService puzzleGeneratorService,
         ILogger<PuzzleController> logger)
     {
         _puzzleRepository = puzzleRepository;
         _pieceRepository = pieceRepository;
+        _puzzleGeneratorService = puzzleGeneratorService;
         _logger = logger;
     }
 
@@ -196,9 +199,14 @@ public class PuzzleController : ControllerBase
                 EstimatedCompletionMinutes = request.PieceCount / 10 // Rough estimate
             };
 
-            // TODO: Generate puzzle pieces based on image and piece count
-            // For now, we'll skip piece generation
-            var pieces = new List<PuzzlePiece>();
+            // Generate puzzle pieces based on image and piece count
+            var pieces = await _puzzleGeneratorService.GeneratePuzzlePiecesAsync(
+                puzzle.ImageUrl,
+                puzzle.PieceCount,
+                puzzle.Id,
+                puzzle.Width,
+                puzzle.Height
+            );
             
             await _puzzleRepository.CreatePuzzleAsync(puzzle, pieces);
 

@@ -8,6 +8,7 @@ using CollaborativePuzzle.Api.MinimalApis;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using CollaborativePuzzle.Api.Extensions;
 using CollaborativePuzzle.Api.Middleware;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,12 @@ builder.Services.AddControllers();
 // Configure authentication and authorization
 builder.Services.AddCustomAuthentication(builder.Configuration);
 builder.Services.AddCustomAuthorization();
+
+// Configure API versioning
+builder.Services.AddCustomApiVersioning();
+
+// Configure rate limiting with Redis
+builder.Services.AddRedisRateLimiting();
 
 // Configure Minimal APIs with OpenAPI/Swagger
 SimpleMinimalApiEndpoints.ConfigureMinimalApis(builder);
@@ -28,12 +35,11 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+})
+.AddStackExchangeRedis(redisConnectionString, options =>
+{
+    options.Configuration.ChannelPrefix = RedisChannel.Literal("puzzle-app");
 });
-// TODO: Add Redis backplane with newer package
-// .AddStackExchangeRedis(redisConnectionString, options =>
-// {
-//     options.Configuration.ChannelPrefix = "puzzle-app";
-// });
 
 // Add Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
@@ -45,14 +51,22 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     return ConnectionMultiplexer.Connect(configuration);
 });
 
+// Add Entity Framework
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? 
+    "Server=172.31.208.1,14333;Database=CollaborativePuzzle;User Id=sv;Password=YourPassword;TrustServerCertificate=true;";
+builder.Services.AddDbContext<CollaborativePuzzle.Infrastructure.Data.PuzzleDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
 // Add services
 builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.IRedisService, CollaborativePuzzle.Infrastructure.Services.RedisService>();
+builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.IPuzzleGeneratorService, CollaborativePuzzle.Infrastructure.Services.PuzzleGeneratorService>();
 
-// Add repositories - using minimal implementations for now
-builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.ISessionRepository, CollaborativePuzzle.Infrastructure.Repositories.MinimalSessionRepository>();
+// Add repositories - using EF implementation for SessionRepository
+builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.ISessionRepository, CollaborativePuzzle.Infrastructure.Repositories.SessionRepository>();
 builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.IPieceRepository, CollaborativePuzzle.Infrastructure.Repositories.MinimalPieceRepository>();
 builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.IPuzzleRepository, CollaborativePuzzle.Infrastructure.Repositories.MinimalPuzzleRepository>();
 builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.IUserRepository, CollaborativePuzzle.Infrastructure.Repositories.MinimalUserRepository>();
+builder.Services.AddScoped<CollaborativePuzzle.Core.Interfaces.IApiKeyRepository, CollaborativePuzzle.Infrastructure.Repositories.MinimalApiKeyRepository>();
 
 // Add Redis configuration
 builder.Services.Configure<CollaborativePuzzle.Infrastructure.Services.RedisConfiguration>(options =>
@@ -108,6 +122,7 @@ app.UseStaticFiles(); // Enable static files for test.html
 
 // Enable rate limiting
 app.UseRateLimiter();
+app.UseRateLimitTracking();
 
 // Enable WebSockets
 app.UseWebSockets();
@@ -117,6 +132,7 @@ app.UseSocketIO();
 app.UseRouting();
 app.UseAuthentication();
 app.UseApiKeyAuthentication(); // Add API key authentication
+app.UseApiKeyUsageTracking(); // Track API key usage metrics
 app.UseAuthorization();
 
 // Map traditional endpoints (will be deprecated)
@@ -128,9 +144,11 @@ app.MapHub<CollaborativePuzzle.Api.SocketIO.SocketIOHub>("/socketiohub");
 // Map Minimal APIs with OpenAPI/Swagger
 SimpleMinimalApiEndpoints.MapMinimalApis(app);
 
-// Map new Minimal API endpoints
-app.MapPuzzleEndpoints();
-app.MapSessionEndpoints();
-app.MapAuthEndpoints();
+// Map new Minimal API endpoints with versioning
+var versionSet = app.CreateApiVersionSet();
+app.MapPuzzleEndpoints(versionSet);
+app.MapSessionEndpoints(versionSet);
+app.MapAuthEndpoints(versionSet);
+app.MapRateLimitEndpoints();
 
 app.Run();

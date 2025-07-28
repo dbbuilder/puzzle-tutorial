@@ -1,9 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "K+StTPJxkwynEqekaAh2aLoygKgS7AXhL1QK6BqInhqem+FExjsJB/NR5zfDH5l5nRtym84WScYwkLa3dkNs8w==",
+  "dgSpecHash": "bm3xlYwUpKkt0PvIz7VY98Y/R6X+mMSji9+uKt/Z1X5Ko31z3AaxUFAps6qWDKXpfr8VqQanqWPfBNWoGK7kPg==",
   "success": true,
   "projectFilePath": "/mnt/d/dev2/puzzletutorial/tests/CollaborativePuzzle.Tests/CollaborativePuzzle.Tests.csproj",
   "expectedPackageFiles": [
+    "/home/ted/.nuget/packages/asp.versioning.abstractions/8.1.0/asp.versioning.abstractions.8.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/asp.versioning.http/8.1.0/asp.versioning.http.8.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/asp.versioning.mvc/8.1.0/asp.versioning.mvc.8.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/asp.versioning.mvc.apiexplorer/8.1.0/asp.versioning.mvc.apiexplorer.8.1.0.nupkg.sha512",
     "/home/ted/.nuget/packages/aspnetcore.healthchecks.redis/8.0.1/aspnetcore.healthchecks.redis.8.0.1.nupkg.sha512",
     "/home/ted/.nuget/packages/azure.core/1.44.1/azure.core.1.44.1.nupkg.sha512",
     "/home/ted/.nuget/packages/azure.identity/1.13.1/azure.identity.1.13.1.nupkg.sha512",
@@ -44,6 +48,7 @@
     "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.common/1.1.0/microsoft.aspnetcore.signalr.common.1.1.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.core/1.1.0/microsoft.aspnetcore.signalr.core.1.1.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.protocols.json/1.1.0/microsoft.aspnetcore.signalr.protocols.json.1.1.0.nupkg.sha512",
+    "/home/ted/.nuget/packages/microsoft.aspnetcore.signalr.stackexchangeredis/8.0.0/microsoft.aspnetcore.signalr.stackexchangeredis.8.0.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.testhost/8.0.0/microsoft.aspnetcore.testhost.8.0.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.websockets/2.2.0/microsoft.aspnetcore.websockets.2.2.0.nupkg.sha512",
     "/home/ted/.nuget/packages/microsoft.aspnetcore.webutilities/2.2.0/microsoft.aspnetcore.webutilities.2.2.0.nupkg.sha512",

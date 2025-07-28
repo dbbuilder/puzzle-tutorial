@@ -14,6 +14,7 @@
     <PackageReference Include="Hangfire.SqlServer" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -28,6 +29,8 @@
     <PackageReference Include="AspNetCore.HealthChecks.Redis" />
     <PackageReference Include="MQTTnet" />
     <PackageReference Include="MQTTnet.Extensions.ManagedClient" />
+    <PackageReference Include="Asp.Versioning.Mvc" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
   </ItemGroup>
 
   <ItemGroup>

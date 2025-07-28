@@ -110,5 +110,46 @@ namespace CollaborativePuzzle.Core.Interfaces
         /// <param name="message">Object to publish</param>
         /// <returns>Task representing the operation</returns>
         Task PublishAsync<T>(string channel, T message) where T : class;
+
+        /// <summary>
+        /// Increments a value in Redis
+        /// </summary>
+        /// <param name="key">Key to increment</param>
+        /// <param name="value">Value to increment by (default 1)</param>
+        /// <returns>The value after incrementing</returns>
+        Task<long> IncrementAsync(string key, long value = 1);
+
+        /// <summary>
+        /// Sets a string value in Redis
+        /// </summary>
+        /// <param name="key">Cache key</param>
+        /// <param name="value">Value to store</param>
+        /// <param name="expiry">Optional expiration time</param>
+        /// <returns>True if operation was successful</returns>
+        Task<bool> StringSetAsync(string key, string value, TimeSpan? expiry = null);
+
+        /// <summary>
+        /// Sets expiration time for a key
+        /// </summary>
+        /// <param name="key">Cache key</param>
+        /// <param name="expiry">Expiration time</param>
+        /// <returns>True if expiration was set</returns>
+        Task<bool> KeyExpireAsync(string key, TimeSpan expiry);
+
+        /// <summary>
+        /// Gets all keys matching a pattern
+        /// </summary>
+        /// <param name="pattern">Pattern to match</param>
+        /// <returns>Collection of matching keys</returns>
+        Task<IEnumerable<string>> GetKeysAsync(string pattern);
+
+        /// <summary>
+        /// Gets the length of a sorted set within a score range
+        /// </summary>
+        /// <param name="key">Sorted set key</param>
+        /// <param name="min">Minimum score</param>
+        /// <param name="max">Maximum score</param>
+        /// <returns>Number of elements in the range</returns>
+        Task<long> SortedSetLengthAsync(string key, double min, double max);
     }
 }

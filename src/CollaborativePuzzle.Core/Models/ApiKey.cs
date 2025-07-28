@@ -56,6 +56,34 @@ public class ApiKey
     /// When the API key was revoked (if applicable)
     /// </summary>
     public DateTime? RevokedAt { get; set; }
+    
+    // Enhanced features
+    /// <summary>
+    /// Rate limit tier for this API key (basic, standard, premium, unlimited)
+    /// </summary>
+    public string RateLimitTier { get; set; } = "basic";
+    
+    /// <summary>
+    /// ID of the API key this was rotated from
+    /// </summary>
+    public string? RotatedFromKeyId { get; set; }
+    
+    /// <summary>
+    /// When this API key was rotated
+    /// </summary>
+    public DateTime? RotatedAt { get; set; }
+    
+    /// <summary>
+    /// Custom metadata for the API key
+    /// </summary>
+    public Dictionary<string, object>? Metadata { get; set; }
+    
+    /// <summary>
+    /// Custom rate limits (overrides tier defaults)
+    /// </summary>
+    public int? MaxRequestsPerMinute { get; set; }
+    public int? MaxRequestsPerHour { get; set; }
+    public int? MaxRequestsPerDay { get; set; }
 }
 
 /// <summary>
@@ -65,8 +93,14 @@ public class ApiKeyValidationResult
 {
     public bool IsValid { get; set; }
     public string? UserId { get; set; }
+    public string? ApiKeyId { get; set; }
     public string[]? Scopes { get; set; }
     public string? Error { get; set; }
+    
+    // Enhanced features
+    public RateLimitInfo? RateLimitInfo { get; set; }
+    public bool IsNearExpiration { get; set; }
+    public int? DaysUntilExpiration { get; set; }
     
     public static ApiKeyValidationResult Success(string userId, string[] scopes)
     {
@@ -89,17 +123,46 @@ public class ApiKeyValidationResult
 }
 
 /// <summary>
+/// Rate limit information for API key
+/// </summary>
+public class RateLimitInfo
+{
+    public string Tier { get; set; } = "basic";
+    public int Limit { get; set; }
+    public int CurrentUsage { get; set; }
+    public TimeSpan Window { get; set; }
+    public DateTime ResetsAt { get; set; }
+}
+
+/// <summary>
 /// Available API scopes
 /// </summary>
 public static class ApiScopes
 {
-    public const string ReadPuzzles = "read:puzzles";
-    public const string WritePuzzles = "write:puzzles";
-    public const string DeletePuzzles = "delete:puzzles";
-    public const string ReadSessions = "read:sessions";
-    public const string WriteSessions = "write:sessions";
-    public const string AdminUsers = "admin:users";
-    public const string AdminSystem = "admin:system";
+    // Legacy scope names (for backward compatibility)
+    public const string ReadPuzzles = "read_puzzles";
+    public const string WritePuzzles = "write_puzzles";
+    public const string DeletePuzzles = "delete_puzzles";
+    public const string ReadSessions = "read_sessions";
+    public const string WriteSessions = "write_sessions";
+    public const string AdminUsers = "admin_users";
+    public const string AdminSystem = "admin_system";
+    
+    // Hierarchical scope names
+    public const string PuzzlesRead = "puzzles:read";
+    public const string PuzzlesWrite = "puzzles:write";
+    public const string PuzzlesDelete = "puzzles:delete";
+    public const string PuzzlesAll = "puzzles:*";
+    
+    public const string SessionsRead = "sessions:read";
+    public const string SessionsWrite = "sessions:write";
+    public const string SessionsAll = "sessions:*";
+    
+    public const string AdminUsersRead = "admin:users:read";
+    public const string AdminUsersWrite = "admin:users:write";
+    public const string AdminUsersAll = "admin:users:*";
+    public const string AdminSystemAll = "admin:system:*";
+    public const string AdminAll = "admin:*";
     
     public static readonly string[] AllScopes = new[]
     {
@@ -116,5 +179,21 @@ public static class ApiScopes
     {
         ReadPuzzles,
         ReadSessions
+    };
+    
+    /// <summary>
+    /// Maps hierarchical scopes to their expanded permissions
+    /// </summary>
+    public static readonly Dictionary<string, string[]> ScopeHierarchy = new()
+    {
+        ["puzzles:*"] = new[] { ReadPuzzles, WritePuzzles, DeletePuzzles },
+        ["puzzles:read"] = new[] { ReadPuzzles },
+        ["puzzles:write"] = new[] { ReadPuzzles, WritePuzzles },
+        ["sessions:*"] = new[] { ReadSessions, WriteSessions },
+        ["sessions:read"] = new[] { ReadSessions },
+        ["sessions:write"] = new[] { ReadSessions, WriteSessions },
+        ["admin:users:*"] = new[] { AdminUsers },
+        ["admin:system:*"] = new[] { AdminSystem },
+        ["admin:*"] = new[] { AdminUsers, AdminSystem }
     };
 }

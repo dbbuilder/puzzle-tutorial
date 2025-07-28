@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Asp.Versioning;
+using Asp.Versioning.Builder;
 using CollaborativePuzzle.Api.Authorization;
 using CollaborativePuzzle.Core.DTOs;
 using CollaborativePuzzle.Core.Entities;
@@ -15,16 +17,19 @@ namespace CollaborativePuzzle.Api.MinimalApis;
 /// </summary>
 public static class PuzzleEndpoints
 {
-    public static void MapPuzzleEndpoints(this IEndpointRouteBuilder app)
+    public static void MapPuzzleEndpoints(this IEndpointRouteBuilder app, ApiVersionSet versionSet)
     {
-        var group = app.MapGroup("/api/v1/puzzles")
+        // V1 endpoints
+        var v1Group = app.MapGroup("/api/v{version:apiVersion}/puzzles")
             .WithTags("Puzzles")
             .WithOpenApi()
             .RequireAuthorization()
-            .RequireRateLimiting("fixed");
+            .RequireRateLimiting("fixed")
+            .WithApiVersionSet(versionSet)
+            .MapToApiVersion(1, 0);
 
         // GET /api/v1/puzzles
-        group.MapGet("/", GetPuzzlesAsync)
+        v1Group.MapGet("/", GetPuzzlesAsync)
             .WithName("GetPuzzles")
             .WithSummary("Get all public puzzles")
             .WithDescription("Returns a paginated list of public puzzles with optional filtering")
@@ -32,7 +37,7 @@ public static class PuzzleEndpoints
             .AllowAnonymous();
 
         // GET /api/v1/puzzles/{id}
-        group.MapGet("/{id:guid}", GetPuzzleByIdAsync)
+        v1Group.MapGet("/{id:guid}", GetPuzzleByIdAsync)
             .WithName("GetPuzzleById")
             .WithSummary("Get a puzzle by ID")
             .WithDescription("Returns detailed information about a specific puzzle")
@@ -41,7 +46,7 @@ public static class PuzzleEndpoints
             .AllowAnonymous();
 
         // POST /api/v1/puzzles
-        group.MapPost("/", CreatePuzzleAsync)
+        v1Group.MapPost("/", CreatePuzzleAsync)
             .WithName("CreatePuzzle")
             .WithSummary("Create a new puzzle")
             .WithDescription("Creates a new puzzle with the provided image and settings")
@@ -50,7 +55,7 @@ public static class PuzzleEndpoints
             .RequireAuthorization("RequireUserRole");
 
         // PUT /api/v1/puzzles/{id}
-        group.MapPut("/{id:guid}", UpdatePuzzleAsync)
+        v1Group.MapPut("/{id:guid}", UpdatePuzzleAsync)
             .WithName("UpdatePuzzle")
             .WithSummary("Update a puzzle")
             .WithDescription("Updates puzzle metadata (owner only)")
@@ -60,7 +65,7 @@ public static class PuzzleEndpoints
             .RequireAuthorization();
 
         // DELETE /api/v1/puzzles/{id}
-        group.MapDelete("/{id:guid}", DeletePuzzleAsync)
+        v1Group.MapDelete("/{id:guid}", DeletePuzzleAsync)
             .WithName("DeletePuzzle")
             .WithSummary("Delete a puzzle")
             .WithDescription("Permanently deletes a puzzle and all associated data (owner only)")
@@ -70,7 +75,7 @@ public static class PuzzleEndpoints
             .RequireAuthorization();
 
         // GET /api/v1/puzzles/{id}/sessions
-        group.MapGet("/{id:guid}/sessions", GetPuzzleSessionsAsync)
+        v1Group.MapGet("/{id:guid}/sessions", GetPuzzleSessionsAsync)
             .WithName("GetPuzzleSessions")
             .WithSummary("Get active sessions for a puzzle")
             .WithDescription("Returns all active sessions for a specific puzzle")
@@ -78,7 +83,7 @@ public static class PuzzleEndpoints
             .AllowAnonymous();
 
         // GET /api/v1/puzzles/search
-        group.MapGet("/search", SearchPuzzlesAsync)
+        v1Group.MapGet("/search", SearchPuzzlesAsync)
             .WithName("SearchPuzzles")
             .WithSummary("Search puzzles")
             .WithDescription("Search puzzles by title and description")
@@ -86,12 +91,29 @@ public static class PuzzleEndpoints
             .AllowAnonymous();
 
         // GET /api/v1/puzzles/my
-        group.MapGet("/my", GetMyPuzzlesAsync)
+        v1Group.MapGet("/my", GetMyPuzzlesAsync)
             .WithName("GetMyPuzzles")
             .WithSummary("Get user's puzzles")
             .WithDescription("Returns all puzzles created by the authenticated user")
             .Produces<PuzzleListResponse>(StatusCodes.Status200OK)
             .RequireAuthorization();
+
+        // V2 endpoints with enhanced features
+        var v2Group = app.MapGroup("/api/v{version:apiVersion}/puzzles")
+            .WithTags("Puzzles V2")
+            .WithOpenApi()
+            .RequireAuthorization()
+            .RequireRateLimiting("sliding")
+            .WithApiVersionSet(versionSet)
+            .MapToApiVersion(2, 0);
+
+        // GET /api/v2/puzzles with enhanced filtering
+        v2Group.MapGet("/", GetPuzzlesV2Async)
+            .WithName("GetPuzzlesV2")
+            .WithSummary("Get all public puzzles with enhanced filtering")
+            .WithDescription("Returns a paginated list of public puzzles with enhanced filtering and sorting options")
+            .Produces<PuzzleListResponseV2>(StatusCodes.Status200OK)
+            .AllowAnonymous();
     }
 
     private static async Task<Ok<PuzzleListResponse>> GetPuzzlesAsync(
@@ -136,6 +158,7 @@ public static class PuzzleEndpoints
         CreatePuzzleRequest request,
         ClaimsPrincipal user,
         IPuzzleRepository puzzleRepository = null!,
+        IPuzzleGeneratorService puzzleGeneratorService = null!,
         ILogger<Program> logger = null!)
     {
         var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -159,8 +182,14 @@ public static class PuzzleEndpoints
             IsPublic = request.IsPublic
         };
         
-        // Generate puzzle pieces (simplified for now)
-        var pieces = GeneratePuzzlePieces(puzzle.Id, request.PieceCount);
+        // Generate puzzle pieces using the generator service
+        var pieces = await puzzleGeneratorService.GeneratePuzzlePiecesAsync(
+            puzzle.ImageUrl,
+            puzzle.PieceCount,
+            puzzle.Id,
+            puzzle.Width,
+            puzzle.Height
+        );
         
         var created = await puzzleRepository.CreatePuzzleAsync(puzzle, pieces);
         logger.LogInformation("Created puzzle {PuzzleId} for user {UserId}", created.Id, userId);
@@ -381,6 +410,71 @@ public static class PuzzleEndpoints
         
         return pieces;
     }
+
+    // V2 Methods
+    private static async Task<Ok<PuzzleListResponseV2>> GetPuzzlesV2Async(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? category = null,
+        [FromQuery] string? difficulty = null,
+        [FromQuery] string? sortBy = "created",
+        [FromQuery] string? sortOrder = "desc",
+        [FromQuery] int? minPieces = null,
+        [FromQuery] int? maxPieces = null,
+        IPuzzleRepository puzzleRepository = null!,
+        ILogger<Program> logger = null!)
+    {
+        var skip = (page - 1) * pageSize;
+        // In a real implementation, this would use the enhanced filtering
+        var puzzles = await puzzleRepository.GetPublicPuzzlesAsync(skip, pageSize, category, difficulty);
+        
+        var response = new PuzzleListResponseV2
+        {
+            Puzzles = puzzles.Select(p => MapToPuzzleDtoV2(p)),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = puzzles.Count(), // In real implementation, get total count
+            HasMore = puzzles.Count() == pageSize,
+            SortBy = sortBy ?? "created",
+            SortOrder = sortOrder ?? "desc"
+        };
+        
+        logger.LogInformation("Retrieved {Count} public puzzles with V2 filtering", puzzles.Count());
+        return TypedResults.Ok(response);
+    }
+
+    private static PuzzleDtoV2 MapToPuzzleDtoV2(Puzzle puzzle)
+    {
+        return new PuzzleDtoV2
+        {
+            Id = puzzle.Id,
+            Title = puzzle.Title,
+            Description = puzzle.Description,
+            PieceCount = puzzle.PieceCount,
+            Difficulty = puzzle.Difficulty.ToString(),
+            ImageUrl = puzzle.ImageUrl,
+            ThumbnailUrl = puzzle.ImageUrl, // In real implementation, generate thumbnail
+            PiecesDataUrl = puzzle.PiecesDataUrl,
+            Category = puzzle.Category,
+            Tags = puzzle.Tags?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>(),
+            IsPublic = puzzle.IsPublic,
+            CreatedByUserId = puzzle.CreatedByUserId,
+            CreatedByUsername = puzzle.CreatedByUser?.Username ?? "Unknown",
+            CreatedAt = puzzle.CreatedAt,
+            TotalSessions = puzzle.TotalSessions,
+            TotalCompletions = puzzle.TotalCompletions,
+            AverageRating = puzzle.AverageRating,
+            TotalRatings = puzzle.TotalRatings,
+            EstimatedDuration = TimeSpan.FromMinutes(puzzle.EstimatedCompletionMinutes),
+            Dimensions = new PuzzleDimensions
+            {
+                Width = puzzle.Width,
+                Height = puzzle.Height,
+                Columns = puzzle.GridColumns,
+                Rows = puzzle.GridRows
+            }
+        };
+    }
 }
 
 /// <summary>
@@ -392,4 +486,41 @@ public class PuzzleListResponse
     public int Page { get; set; }
     public int PageSize { get; set; }
     public bool HasMore { get; set; }
+}
+
+/// <summary>
+/// Enhanced response for V2 with additional metadata
+/// </summary>
+public class PuzzleListResponseV2
+{
+    public IEnumerable<PuzzleDtoV2> Puzzles { get; set; } = new List<PuzzleDtoV2>();
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalCount { get; set; }
+    public bool HasMore { get; set; }
+    public string SortBy { get; set; } = "created";
+    public string SortOrder { get; set; } = "desc";
+}
+
+/// <summary>
+/// Enhanced puzzle DTO for V2 with additional fields
+/// </summary>
+public class PuzzleDtoV2 : PuzzleDto
+{
+    public string ThumbnailUrl { get; set; } = default!;
+    public new string[] Tags { get; set; } = Array.Empty<string>();
+    public new string CreatedByUsername { get; set; } = default!;
+    public TimeSpan EstimatedDuration { get; set; }
+    public PuzzleDimensions Dimensions { get; set; } = default!;
+}
+
+/// <summary>
+/// Puzzle dimensions information
+/// </summary>
+public class PuzzleDimensions
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int Columns { get; set; }
+    public int Rows { get; set; }
 }

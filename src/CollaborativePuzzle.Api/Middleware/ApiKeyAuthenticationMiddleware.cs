@@ -56,11 +56,18 @@ public class ApiKeyAuthenticationMiddleware
                     claims.Add(new Claim("scope", scope));
                 }
 
+                // Add API key ID claim for tracking
+                claims.Add(new Claim("ApiKeyId", validationResult.ApiKeyId ?? string.Empty));
+                
                 var identity = new ClaimsIdentity(claims, "ApiKey");
                 var principal = new ClaimsPrincipal(identity);
                 
                 // Set the user context
                 context.User = principal;
+                
+                // Store API key info in HttpContext for usage tracking
+                context.Items["ApiKey"] = apiKey;
+                context.Items["ApiKeyId"] = validationResult.ApiKeyId;
                 
                 _logger.LogDebug("API key authenticated for user {UserId}", validationResult.UserId);
             }

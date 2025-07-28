@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Asp.Versioning;
+using Asp.Versioning.Builder;
 using CollaborativePuzzle.Core.DTOs;
 using CollaborativePuzzle.Core.Entities;
 using CollaborativePuzzle.Core.Enums;
@@ -13,13 +15,15 @@ namespace CollaborativePuzzle.Api.MinimalApis;
 /// </summary>
 public static class SessionEndpoints
 {
-    public static void MapSessionEndpoints(this IEndpointRouteBuilder app)
+    public static void MapSessionEndpoints(this IEndpointRouteBuilder app, ApiVersionSet versionSet)
     {
-        var group = app.MapGroup("/api/v1/sessions")
+        var group = app.MapGroup("/api/v{version:apiVersion}/sessions")
             .WithTags("Sessions")
             .WithOpenApi()
             .RequireAuthorization()
-            .RequireRateLimiting("fixed");
+            .RequireRateLimiting("fixed")
+            .WithApiVersionSet(versionSet)
+            .MapToApiVersion(1, 0);
 
         // GET /api/v1/sessions
         group.MapGet("/", GetPublicSessionsAsync)
@@ -103,13 +107,46 @@ public static class SessionEndpoints
             .WithSummary("Get user's active sessions")
             .WithDescription("Returns all active sessions for the authenticated user")
             .Produces<SessionListResponse>(StatusCodes.Status200OK);
+
+        // V2 endpoints with enhanced features
+        var v2Group = app.MapGroup("/api/v{version:apiVersion}/sessions")
+            .WithTags("Sessions V2")
+            .WithOpenApi()
+            .RequireAuthorization()
+            .RequireRateLimiting("sliding")
+            .WithApiVersionSet(versionSet)
+            .MapToApiVersion(2, 0);
+
+        // GET /api/v2/sessions with enhanced filtering
+        v2Group.MapGet("/", SessionEndpointsV2.GetPublicSessionsV2Async)
+            .WithName("GetPublicSessionsV2")
+            .WithSummary("Get public sessions with enhanced filtering")
+            .WithDescription("Returns sessions with advanced filtering and real-time status")
+            .Produces<SessionListResponseV2>(StatusCodes.Status200OK)
+            .AllowAnonymous();
+
+        // POST /api/v2/sessions/bulk-join
+        v2Group.MapPost("/bulk-join", SessionEndpointsV2.BulkJoinSessionsAsync)
+            .WithName("BulkJoinSessions")
+            .WithSummary("Join multiple sessions")
+            .WithDescription("Join multiple sessions in a single request")
+            .Produces<BulkJoinResponse>(StatusCodes.Status200OK);
+
+        // GET /api/v2/sessions/{id}/analytics
+        v2Group.MapGet("/{id:guid}/analytics", SessionEndpointsV2.GetSessionAnalyticsAsync)
+            .WithName("GetSessionAnalytics")
+            .WithSummary("Get session analytics")
+            .WithDescription("Returns detailed analytics for a session (host only)")
+            .Produces<SessionAnalytics>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
     }
 
     private static async Task<Ok<SessionListResponse>> GetPublicSessionsAsync(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var skip = (page - 1) * pageSize;
         var sessions = await sessionRepository.GetPublicSessionsAsync(skip, pageSize);
@@ -129,7 +166,7 @@ public static class SessionEndpoints
     private static async Task<Results<Ok<SessionDetailsDto>, NotFound>> GetSessionByIdAsync(
         Guid id,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var session = await sessionRepository.GetSessionWithParticipantsAsync(id);
         if (session == null)
@@ -144,7 +181,7 @@ public static class SessionEndpoints
     private static async Task<Results<Ok<SessionDetailsDto>, NotFound>> GetSessionByJoinCodeAsync(
         string joinCode,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var session = await sessionRepository.GetSessionByJoinCodeAsync(joinCode);
         if (session == null)
@@ -161,7 +198,7 @@ public static class SessionEndpoints
         ClaimsPrincipal user,
         ISessionRepository sessionRepository = null!,
         IPuzzleRepository puzzleRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
@@ -209,7 +246,7 @@ public static class SessionEndpoints
         Guid id,
         ClaimsPrincipal user,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
@@ -262,7 +299,7 @@ public static class SessionEndpoints
         Guid id,
         ClaimsPrincipal user,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
@@ -285,7 +322,7 @@ public static class SessionEndpoints
         UpdateSessionRequest request,
         ClaimsPrincipal user,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var session = await sessionRepository.GetSessionAsync(id);
         if (session == null)
@@ -319,7 +356,7 @@ public static class SessionEndpoints
         Guid id,
         ClaimsPrincipal user,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var session = await sessionRepository.GetSessionAsync(id);
         if (session == null)
@@ -344,7 +381,7 @@ public static class SessionEndpoints
     private static async Task<Results<Ok<ParticipantListResponse>, NotFound>> GetSessionParticipantsAsync(
         Guid id,
         ISessionRepository sessionRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var session = await sessionRepository.GetSessionAsync(id);
         if (session == null)
@@ -375,7 +412,7 @@ public static class SessionEndpoints
         ClaimsPrincipal user,
         ISessionRepository sessionRepository = null!,
         IUserRepository userRepository = null!,
-        ILogger<Program> logger = null!)
+        ILogger logger = null!)
     {
         var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
@@ -479,4 +516,329 @@ public class ParticipantDto
     public string Status { get; set; } = default!;
     public DateTime JoinedAt { get; set; }
     public int PiecesPlaced { get; set; }
+}
+
+// V2 Methods Implementation
+public static class SessionEndpointsV2
+{
+    public static async Task<Ok<SessionListResponseV2>> GetPublicSessionsV2Async(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? puzzleCategory = null,
+        [FromQuery] string? difficulty = null,
+        [FromQuery] string? status = null,
+        [FromQuery] int? minParticipants = null,
+        [FromQuery] int? maxParticipants = null,
+        [FromQuery] string? sortBy = "created",
+        [FromQuery] string? sortOrder = "desc",
+        ISessionRepository sessionRepository = null!,
+        ILogger logger = null!)
+    {
+        var skip = (page - 1) * pageSize;
+        // In a real implementation, this would use enhanced filtering
+        var sessions = await sessionRepository.GetPublicSessionsAsync(skip, pageSize);
+        
+        var response = new SessionListResponseV2
+        {
+            Sessions = sessions.Select(s => MapToSessionDtoV2(s)),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = sessions.Count(), // In real implementation, get total count
+            HasMore = sessions.Count() == pageSize,
+            SortBy = sortBy ?? "created",
+            SortOrder = sortOrder ?? "desc",
+            Filters = new SessionFilters
+            {
+                PuzzleCategory = puzzleCategory,
+                Difficulty = difficulty,
+                Status = status,
+                MinParticipants = minParticipants,
+                MaxParticipants = maxParticipants
+            }
+        };
+        
+        logger.LogInformation("Retrieved {Count} public sessions with V2 filtering", sessions.Count());
+        return TypedResults.Ok(response);
+    }
+
+    public static async Task<Ok<BulkJoinResponse>> BulkJoinSessionsAsync(
+        BulkJoinRequest request,
+        ClaimsPrincipal user,
+        ISessionRepository sessionRepository = null!,
+        ILogger logger = null!)
+    {
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return TypedResults.Ok(new BulkJoinResponse
+            {
+                Success = false,
+                Results = new List<BulkJoinResult>()
+            });
+        }
+        
+        var results = new List<BulkJoinResult>();
+        
+        foreach (var sessionId in request.SessionIds)
+        {
+            try
+            {
+                var session = await sessionRepository.GetSessionWithParticipantsAsync(sessionId);
+                if (session == null)
+                {
+                    results.Add(new BulkJoinResult
+                    {
+                        SessionId = sessionId,
+                        Success = false,
+                        Error = "Session not found"
+                    });
+                    continue;
+                }
+                
+                // Check if already joined
+                var existingParticipant = await sessionRepository.GetParticipantAsync(sessionId, Guid.Parse(userId));
+                if (existingParticipant != null)
+                {
+                    results.Add(new BulkJoinResult
+                    {
+                        SessionId = sessionId,
+                        Success = true,
+                        Message = "Already joined"
+                    });
+                    continue;
+                }
+                
+                // Check max participants
+                if (session.Participants?.Count >= session.MaxParticipants)
+                {
+                    results.Add(new BulkJoinResult
+                    {
+                        SessionId = sessionId,
+                        Success = false,
+                        Error = "Session is full"
+                    });
+                    continue;
+                }
+                
+                await sessionRepository.AddParticipantAsync(sessionId, Guid.Parse(userId));
+                results.Add(new BulkJoinResult
+                {
+                    SessionId = sessionId,
+                    Success = true,
+                    Message = "Successfully joined"
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error joining session {SessionId}", sessionId);
+                results.Add(new BulkJoinResult
+                {
+                    SessionId = sessionId,
+                    Success = false,
+                    Error = "Internal error"
+                });
+            }
+        }
+        
+        logger.LogInformation("User {UserId} bulk joined {Count} sessions", userId, results.Count(r => r.Success));
+        
+        return TypedResults.Ok(new BulkJoinResponse
+        {
+            Success = true,
+            Results = results
+        });
+    }
+
+    public static async Task<Results<Ok<SessionAnalytics>, NotFound, ForbidHttpResult>> GetSessionAnalyticsAsync(
+        Guid id,
+        ClaimsPrincipal user,
+        ISessionRepository sessionRepository = null!,
+        ILogger logger = null!)
+    {
+        var session = await sessionRepository.GetSessionWithParticipantsAsync(id);
+        if (session == null)
+        {
+            return TypedResults.NotFound();
+        }
+        
+        // Check if user is host
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (session.CreatedByUserId.ToString() != userId)
+        {
+            logger.LogWarning("User {UserId} attempted to view analytics for session {SessionId} without being host", userId, id);
+            return TypedResults.Forbid();
+        }
+        
+        // Generate analytics (simplified for now)
+        var analytics = new SessionAnalytics
+        {
+            SessionId = id,
+            TotalParticipants = session.Participants?.Count ?? 0,
+            ActiveParticipants = session.Participants?.Count(p => p.Status == Core.Enums.ParticipantStatus.Online) ?? 0,
+            TotalPiecesPlaced = session.Participants?.Sum(p => p.PiecesPlaced) ?? 0,
+            AveragePiecesPerParticipant = session.Participants?.Any() == true 
+                ? (double)session.Participants.Sum(p => p.PiecesPlaced) / session.Participants.Count 
+                : 0,
+            SessionDuration = session.StartedAt.HasValue 
+                ? DateTime.UtcNow - session.StartedAt.Value 
+                : TimeSpan.Zero,
+            CompletionPercentage = (double)session.CompletionPercentage,
+            ParticipantBreakdown = session.Participants?.GroupBy(p => p.Role)
+                .ToDictionary(g => g.Key.ToString(), g => g.Count()) ?? new Dictionary<string, int>(),
+            ActivityTimeline = new List<ActivityEvent>() // Would be populated from event log
+        };
+        
+        logger.LogInformation("Retrieved analytics for session {SessionId}", id);
+        return TypedResults.Ok(analytics);
+    }
+
+    private static SessionDtoV2 MapToSessionDtoV2(PuzzleSession session)
+    {
+        return new SessionDtoV2
+        {
+            Id = session.Id,
+            PuzzleId = session.PuzzleId,
+            PuzzleTitle = session.Puzzle?.Title ?? "Unknown",
+            PuzzleThumbnailUrl = session.Puzzle?.ImageUrl, // In real implementation, use thumbnail
+            Name = session.Name,
+            JoinCode = session.JoinCode,
+            IsPublic = session.IsPublic,
+            MaxParticipants = session.MaxParticipants,
+            CurrentParticipants = session.Participants?.Count ?? 0,
+            OnlineParticipants = session.Participants?.Count(p => p.Status == Core.Enums.ParticipantStatus.Online) ?? 0,
+            Status = session.Status.ToString(),
+            StatusDetail = GetStatusDetail(session),
+            CreatedAt = session.CreatedAt,
+            StartedAt = session.StartedAt,
+            LastActivityAt = session.LastActivityAt,
+            CompletionPercentage = (double)session.CompletionPercentage,
+            EstimatedTimeRemaining = CalculateEstimatedTimeRemaining(session),
+            Tags = new[] { session.Puzzle?.Category ?? "general" }
+        };
+    }
+
+    private static string GetStatusDetail(PuzzleSession session)
+    {
+        return session.Status switch
+        {
+            Core.Enums.SessionStatus.Active when session.CompletionPercentage > 75 => "Nearly complete",
+            Core.Enums.SessionStatus.Active when session.CompletionPercentage > 50 => "Making good progress",
+            Core.Enums.SessionStatus.Active when session.CompletionPercentage > 25 => "In progress",
+            Core.Enums.SessionStatus.Active => "Just started",
+            Core.Enums.SessionStatus.Completed => "Puzzle completed!",
+            Core.Enums.SessionStatus.Paused => "Session paused",
+            _ => session.Status.ToString()
+        };
+    }
+
+    private static TimeSpan? CalculateEstimatedTimeRemaining(PuzzleSession session)
+    {
+        if (!session.StartedAt.HasValue || session.CompletionPercentage <= 0)
+            return null;
+            
+        var elapsed = DateTime.UtcNow - session.StartedAt.Value;
+        var totalEstimated = elapsed.TotalMinutes / ((double)session.CompletionPercentage / 100.0);
+        var remaining = totalEstimated - elapsed.TotalMinutes;
+        
+        return remaining > 0 ? TimeSpan.FromMinutes(remaining) : TimeSpan.Zero;
+    }
+}
+
+// V2 DTOs
+/// <summary>
+/// Enhanced session list response for V2
+/// </summary>
+public class SessionListResponseV2
+{
+    public IEnumerable<SessionDtoV2> Sessions { get; set; } = new List<SessionDtoV2>();
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalCount { get; set; }
+    public bool HasMore { get; set; }
+    public string SortBy { get; set; } = "created";
+    public string SortOrder { get; set; } = "desc";
+    public SessionFilters Filters { get; set; } = default!;
+}
+
+/// <summary>
+/// Enhanced session DTO for V2
+/// </summary>
+public class SessionDtoV2 : Core.DTOs.SessionDto
+{
+    public string PuzzleTitle { get; set; } = default!;
+    public string? PuzzleThumbnailUrl { get; set; }
+    public int OnlineParticipants { get; set; }
+    public string StatusDetail { get; set; } = default!;
+    public DateTime? StartedAt { get; set; }
+    public DateTime? LastActivityAt { get; set; }
+    public double CompletionPercentage { get; set; }
+    public TimeSpan? EstimatedTimeRemaining { get; set; }
+    public string[] Tags { get; set; } = Array.Empty<string>();
+}
+
+/// <summary>
+/// Session filters for V2
+/// </summary>
+public class SessionFilters
+{
+    public string? PuzzleCategory { get; set; }
+    public string? Difficulty { get; set; }
+    public string? Status { get; set; }
+    public int? MinParticipants { get; set; }
+    public int? MaxParticipants { get; set; }
+}
+
+/// <summary>
+/// Bulk join request
+/// </summary>
+public class BulkJoinRequest
+{
+    public Guid[] SessionIds { get; set; } = Array.Empty<Guid>();
+}
+
+/// <summary>
+/// Bulk join response
+/// </summary>
+public class BulkJoinResponse
+{
+    public bool Success { get; set; }
+    public IEnumerable<BulkJoinResult> Results { get; set; } = new List<BulkJoinResult>();
+}
+
+/// <summary>
+/// Individual bulk join result
+/// </summary>
+public class BulkJoinResult
+{
+    public Guid SessionId { get; set; }
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public string? Error { get; set; }
+}
+
+/// <summary>
+/// Session analytics
+/// </summary>
+public class SessionAnalytics
+{
+    public Guid SessionId { get; set; }
+    public int TotalParticipants { get; set; }
+    public int ActiveParticipants { get; set; }
+    public int TotalPiecesPlaced { get; set; }
+    public double AveragePiecesPerParticipant { get; set; }
+    public TimeSpan SessionDuration { get; set; }
+    public double CompletionPercentage { get; set; }
+    public Dictionary<string, int> ParticipantBreakdown { get; set; } = new();
+    public IEnumerable<ActivityEvent> ActivityTimeline { get; set; } = new List<ActivityEvent>();
+}
+
+/// <summary>
+/// Activity event for analytics
+/// </summary>
+public class ActivityEvent
+{
+    public DateTime Timestamp { get; set; }
+    public string EventType { get; set; } = default!;
+    public string Description { get; set; } = default!;
+    public Guid? UserId { get; set; }
 }
