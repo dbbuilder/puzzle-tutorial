@@ -62,4 +62,24 @@ namespace CollaborativePuzzle.Core.Models
         public double AverageRating { get; set; }
         public int TotalRatings { get; set; }
     }
+    
+    /// <summary>
+    /// Data Transfer Object for updating a puzzle
+    /// </summary>
+    public class UpdatePuzzleRequest
+    {
+        [MaxLength(200)]
+        public string? Title { get; set; }
+        
+        [MaxLength(1000)]
+        public string? Description { get; set; }
+        
+        [MaxLength(100)]
+        public string? Category { get; set; }
+        
+        [MaxLength(500)]
+        public string? Tags { get; set; }
+        
+        public bool? IsPublic { get; set; }
+    }
 }

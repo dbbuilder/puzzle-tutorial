@@ -72,6 +72,21 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.0" />
     
+    <!-- Performance testing -->
+    <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageVersion Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.14.0" />
+    
+    <!-- Load testing -->
+    <PackageVersion Include="NBomber" Version="6.0.0" />
+    <PackageVersion Include="NBomber.Http" Version="6.0.0" />
+    <PackageVersion Include="NBomber.Sinks.InfluxDB" Version="6.0.0" />
+    
+    <!-- E2E testing -->
+    <PackageVersion Include="Microsoft.Playwright" Version="1.49.0" />
+    
+    <!-- Integration testing -->
+    <PackageVersion Include="Respawn" Version="6.2.1" />
+    
     <!-- Code quality -->
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="9.32.0.97167" />

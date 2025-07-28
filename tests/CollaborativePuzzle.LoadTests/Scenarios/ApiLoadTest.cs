@@ -1,6 +1,6 @@
 using NBomber.Contracts;
 using NBomber.CSharp;
-using NBomber.Plugins.Http.CSharp;
+using NBomber.Http;
 using System.Text.Json;
 
 namespace CollaborativePuzzle.LoadTests.Scenarios;

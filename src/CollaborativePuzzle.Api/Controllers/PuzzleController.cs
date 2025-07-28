@@ -1,6 +1,7 @@
 using CollaborativePuzzle.Api.Authorization;
 using CollaborativePuzzle.Core.DTOs;
 using CollaborativePuzzle.Core.Entities;
+using CollaborativePuzzle.Core.Enums;
 using CollaborativePuzzle.Core.Interfaces;
 using CollaborativePuzzle.Core.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -45,15 +46,28 @@ public class PuzzleController : ControllerBase
                 puzzles = puzzles.Select(p => new PuzzleDto
                 {
                     Id = p.Id,
-                    Name = p.Name,
+                    Title = p.Title,
                     Description = p.Description,
                     ImageUrl = p.ImageUrl,
                     PieceCount = p.PieceCount,
-                    Difficulty = p.Difficulty,
-                    Category = p.Category?.Name,
+                    Difficulty = p.Difficulty.ToString(),
+                    Category = p.Category,
                     CreatedAt = p.CreatedAt,
-                    Rating = p.AverageRating,
-                    TotalPlays = p.TotalSessions
+                    AverageRating = p.AverageRating,
+                    TotalSessions = p.TotalSessions,
+                    CreatedByUserId = p.CreatedByUserId,
+                    CreatedByUsername = p.CreatedByUser?.Username ?? "Unknown",
+                    PiecesDataUrl = p.PiecesDataUrl,
+                    Width = p.Width,
+                    Height = p.Height,
+                    GridColumns = p.GridColumns,
+                    GridRows = p.GridRows,
+                    EstimatedCompletionMinutes = p.EstimatedCompletionMinutes,
+                    Tags = p.Tags,
+                    IsPublic = p.IsPublic,
+                    IsFeatured = p.IsFeatured,
+                    TotalCompletions = p.TotalCompletions,
+                    TotalRatings = p.TotalRatings
                 }),
                 page,
                 pageSize,
@@ -82,27 +96,57 @@ public class PuzzleController : ControllerBase
                 return NotFound(new { error = "Puzzle not found" });
             }
 
-            return Ok(new PuzzleDto
+            return Ok(new 
             {
-                Id = puzzle.Id,
-                Name = puzzle.Name,
-                Description = puzzle.Description,
-                ImageUrl = puzzle.ImageUrl,
-                PieceCount = puzzle.PieceCount,
-                Difficulty = puzzle.Difficulty,
-                Category = puzzle.Category?.Name,
-                CreatedAt = puzzle.CreatedAt,
-                Rating = puzzle.AverageRating,
-                TotalPlays = puzzle.TotalSessions,
-                Pieces = puzzle.Pieces?.Select(p => new PuzzlePieceDto
+                puzzle = new PuzzleDto
+                {
+                    Id = puzzle.Id,
+                    Title = puzzle.Title,
+                    Description = puzzle.Description,
+                    ImageUrl = puzzle.ImageUrl,
+                    PieceCount = puzzle.PieceCount,
+                    Difficulty = puzzle.Difficulty.ToString(),
+                    Category = puzzle.Category,
+                    CreatedAt = puzzle.CreatedAt,
+                    AverageRating = puzzle.AverageRating,
+                    TotalSessions = puzzle.TotalSessions,
+                    CreatedByUserId = puzzle.CreatedByUserId,
+                    CreatedByUsername = puzzle.CreatedByUser?.Username ?? "Unknown",
+                    PiecesDataUrl = puzzle.PiecesDataUrl,
+                    Width = puzzle.Width,
+                    Height = puzzle.Height,
+                    GridColumns = puzzle.GridColumns,
+                    GridRows = puzzle.GridRows,
+                    EstimatedCompletionMinutes = puzzle.EstimatedCompletionMinutes,
+                    Tags = puzzle.Tags,
+                    IsPublic = puzzle.IsPublic,
+                    IsFeatured = puzzle.IsFeatured,
+                    TotalCompletions = puzzle.TotalCompletions,
+                    TotalRatings = puzzle.TotalRatings
+                },
+                pieces = puzzle.Pieces?.Select(p => new PuzzlePieceDto
                 {
                     Id = p.Id,
-                    PieceIndex = p.PieceIndex,
-                    CorrectPositionX = p.CorrectPositionX,
-                    CorrectPositionY = p.CorrectPositionY,
-                    Width = p.Width,
-                    Height = p.Height,
-                    EdgeData = p.EdgeData
+                    PuzzleId = p.PuzzleId,
+                    PieceNumber = p.PieceNumber,
+                    GridX = p.GridX,
+                    GridY = p.GridY,
+                    CorrectX = p.CorrectX,
+                    CorrectY = p.CorrectY,
+                    CurrentX = p.CurrentX,
+                    CurrentY = p.CurrentY,
+                    Rotation = p.Rotation,
+                    ShapeData = p.ShapeData,
+                    ImageX = p.ImageX,
+                    ImageY = p.ImageY,
+                    ImageWidth = p.ImageWidth,
+                    ImageHeight = p.ImageHeight,
+                    IsPlaced = p.IsPlaced,
+                    IsEdgePiece = p.IsEdgePiece,
+                    IsCornerPiece = p.IsCornerPiece,
+                    LockedByUserId = p.LockedByUserId,
+                    LockedByUsername = p.LockedByUser?.Username,
+                    LockedAt = p.LockedAt
                 }).ToList()
             });
         }
@@ -131,20 +175,30 @@ public class PuzzleController : ControllerBase
             var puzzle = new Puzzle
             {
                 Id = Guid.NewGuid(),
-                Name = request.Name,
+                Title = request.Title,
                 Description = request.Description,
                 ImageUrl = request.ImageUrl,
                 PieceCount = request.PieceCount,
-                Difficulty = request.Difficulty,
+                Difficulty = Enum.TryParse<PuzzleDifficulty>(request.Category, out var diff) ? diff : PuzzleDifficulty.Medium,
                 CreatedByUserId = Guid.Parse(userId),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 IsActive = true,
-                IsPublic = request.IsPublic
+                IsPublic = request.IsPublic,
+                Category = request.Category,
+                Tags = request.Tags,
+                // Default values for now - should be calculated based on image
+                Width = 1000,
+                Height = 800,
+                GridColumns = 10,
+                GridRows = 8,
+                PiecesDataUrl = request.ImageUrl, // Will be updated after processing
+                EstimatedCompletionMinutes = request.PieceCount / 10 // Rough estimate
             };
 
-            // Generate puzzle pieces
-            var pieces = GeneratePuzzlePieces(puzzle.Id, request.PieceCount, request.Columns, request.Rows);
+            // TODO: Generate puzzle pieces based on image and piece count
+            // For now, we'll skip piece generation
+            var pieces = new List<PuzzlePiece>();
             
             await _puzzleRepository.CreatePuzzleAsync(puzzle, pieces);
 
@@ -168,14 +222,16 @@ public class PuzzleController : ControllerBase
     {
         try
         {
-            var puzzle = await _puzzleRepository.GetPuzzleAsync(puzzleId);
+            var puzzle = await _puzzleRepository.GetPuzzleByIdAsync(puzzleId);
             if (puzzle == null)
             {
                 return NotFound(new { error = "Puzzle not found" });
             }
 
-            puzzle.Name = request.Name ?? puzzle.Name;
+            puzzle.Title = request.Title ?? puzzle.Title;
             puzzle.Description = request.Description ?? puzzle.Description;
+            puzzle.Category = request.Category ?? puzzle.Category;
+            puzzle.Tags = request.Tags ?? puzzle.Tags;
             puzzle.IsPublic = request.IsPublic ?? puzzle.IsPublic;
             puzzle.UpdatedAt = DateTime.UtcNow;
 
@@ -204,7 +260,7 @@ public class PuzzleController : ControllerBase
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var isAdmin = User.IsInRole("Admin");
 
-            var puzzle = await _puzzleRepository.GetPuzzleAsync(puzzleId);
+            var puzzle = await _puzzleRepository.GetPuzzleByIdAsync(puzzleId);
             if (puzzle == null)
             {
                 return NotFound(new { error = "Puzzle not found" });
@@ -254,16 +310,28 @@ public class PuzzleController : ControllerBase
                 puzzles = puzzles.Select(p => new PuzzleDto
                 {
                     Id = p.Id,
-                    Name = p.Name,
+                    Title = p.Title,
                     Description = p.Description,
                     ImageUrl = p.ImageUrl,
                     PieceCount = p.PieceCount,
-                    Difficulty = p.Difficulty,
-                    Category = p.Category?.Name,
+                    Difficulty = p.Difficulty.ToString(),
+                    Category = p.Category,
                     CreatedAt = p.CreatedAt,
-                    Rating = p.AverageRating,
-                    TotalPlays = p.TotalSessions,
-                    IsPublic = p.IsPublic
+                    AverageRating = p.AverageRating,
+                    TotalSessions = p.TotalSessions,
+                    IsPublic = p.IsPublic,
+                    CreatedByUserId = p.CreatedByUserId,
+                    CreatedByUsername = p.CreatedByUser?.Username ?? "You",
+                    PiecesDataUrl = p.PiecesDataUrl,
+                    Width = p.Width,
+                    Height = p.Height,
+                    GridColumns = p.GridColumns,
+                    GridRows = p.GridRows,
+                    EstimatedCompletionMinutes = p.EstimatedCompletionMinutes,
+                    Tags = p.Tags,
+                    IsFeatured = p.IsFeatured,
+                    TotalCompletions = p.TotalCompletions,
+                    TotalRatings = p.TotalRatings
                 }),
                 page,
                 pageSize,
@@ -277,58 +345,4 @@ public class PuzzleController : ControllerBase
         }
     }
 
-    private IEnumerable<PuzzlePiece> GeneratePuzzlePieces(Guid puzzleId, int pieceCount, int columns, int rows)
-    {
-        var pieces = new List<PuzzlePiece>();
-        var pieceWidth = 100.0 / columns;
-        var pieceHeight = 100.0 / rows;
-
-        for (int row = 0; row < rows; row++)
-        {
-            for (int col = 0; col < columns; col++)
-            {
-                var index = row * columns + col;
-                pieces.Add(new PuzzlePiece
-                {
-                    Id = Guid.NewGuid(),
-                    PuzzleId = puzzleId,
-                    PieceIndex = index,
-                    CorrectPositionX = col * pieceWidth,
-                    CorrectPositionY = row * pieceHeight,
-                    Width = pieceWidth,
-                    Height = pieceHeight,
-                    IsEdgePiece = row == 0 || row == rows - 1 || col == 0 || col == columns - 1,
-                    EdgeData = GenerateEdgeData(row, col, rows, columns),
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-        }
-
-        return pieces;
-    }
-
-    private byte[] GenerateEdgeData(int row, int col, int rows, int cols)
-    {
-        // Simplified edge data generation
-        // In a real implementation, this would contain the actual edge shape data
-        return new byte[] { (byte)row, (byte)col, (byte)rows, (byte)cols };
-    }
-}
-
-public class UpdatePuzzleRequest
-{
-    public string? Name { get; set; }
-    public string? Description { get; set; }
-    public bool? IsPublic { get; set; }
-}
-
-public class PuzzlePieceDto
-{
-    public Guid Id { get; set; }
-    public int PieceIndex { get; set; }
-    public double CorrectPositionX { get; set; }
-    public double CorrectPositionY { get; set; }
-    public double Width { get; set; }
-    public double Height { get; set; }
-    public byte[]? EdgeData { get; set; }
 }

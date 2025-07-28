@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "siHhMpfsRmUKGN2NZyvAgK51V3mv3Hqtlcx95IBrsf7ajKzfBceKp2axPvyQmI0NOmzLamNp+BHXY0tRX9S87w==",
+  "dgSpecHash": "K+StTPJxkwynEqekaAh2aLoygKgS7AXhL1QK6BqInhqem+FExjsJB/NR5zfDH5l5nRtym84WScYwkLa3dkNs8w==",
   "success": true,
   "projectFilePath": "/mnt/d/dev2/puzzletutorial/tests/CollaborativePuzzle.Tests/CollaborativePuzzle.Tests.csproj",
   "expectedPackageFiles": [

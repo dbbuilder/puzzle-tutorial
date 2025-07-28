@@ -38,8 +38,8 @@ public class AdminController : ControllerBase
         try
         {
             var users = await _userRepository.GetActiveUsersAsync(1000);
-            var puzzles = await _puzzleRepository.GetPuzzlesAsync(1, 1000);
-            var sessions = await _sessionRepository.GetActiveSessionsAsync(1000);
+            var puzzles = await _puzzleRepository.GetPublicPuzzlesAsync(0, 1000);
+            var sessions = await _sessionRepository.GetPublicSessionsAsync(0, 1000);
 
             var stats = new
             {

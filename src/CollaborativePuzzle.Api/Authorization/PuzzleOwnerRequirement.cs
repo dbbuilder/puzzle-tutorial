@@ -45,7 +45,7 @@ public class PuzzleOwnerAuthorizationHandler : AuthorizationHandler<PuzzleOwnerR
             if (filterContext.HttpContext.Request.RouteValues.TryGetValue("puzzleId", out var puzzleIdValue) &&
                 Guid.TryParse(puzzleIdValue?.ToString(), out var puzzleId))
             {
-                var puzzle = await _puzzleRepository.GetPuzzleAsync(puzzleId);
+                var puzzle = await _puzzleRepository.GetPuzzleByIdAsync(puzzleId);
                 if (puzzle != null && puzzle.CreatedByUserId.ToString() == userId)
                 {
                     context.Succeed(requirement);

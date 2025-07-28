@@ -6,11 +6,16 @@ using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 using CollaborativePuzzle.Api.MinimalApis;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using CollaborativePuzzle.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+
+// Configure authentication and authorization
+builder.Services.AddCustomAuthentication(builder.Configuration);
+builder.Services.AddCustomAuthorization();
 
 // Configure Minimal APIs with OpenAPI/Swagger
 SimpleMinimalApiEndpoints.ConfigureMinimalApis(builder);
@@ -109,6 +114,7 @@ app.UseWebSocketMiddleware();
 app.UseSocketIO();
 
 app.UseRouting();
+app.UseAuthentication();
 app.UseAuthorization();
 
 // Map traditional endpoints
