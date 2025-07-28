@@ -22863,3 +22863,1246 @@ Tool Selection:
 ```
 
 The key is choosing the right tool for your needs: Grafana+Prometheus for metrics-focused monitoring, Azure Monitor for Azure-native applications, and ELK Stack for log aggregation and analysis. Many organizations use a combination for comprehensive observability.
+
+## Q41: When is Socket.IO still needed? Why is it now considered legacy?
+
+### Answer:
+
+Socket.IO was revolutionary when WebSockets had poor browser support and unreliable connections were common. While it's considered legacy in many scenarios due to modern alternatives like native WebSockets and SignalR, there are still specific use cases where Socket.IO provides value.
+
+### Why Socket.IO is Considered Legacy
+
+#### 1. Native WebSocket Support
+```javascript
+// Modern browsers have excellent WebSocket support
+const ws = new WebSocket('wss://api.example.com/ws');
+
+ws.onopen = () => {
+    console.log('Connected');
+    ws.send(JSON.stringify({ type: 'subscribe', channel: 'updates' }));
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Received:', data);
+};
+
+ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+};
+
+ws.onclose = () => {
+    console.log('Disconnected');
+    // Implement reconnection logic
+};
+```
+
+#### 2. Modern Alternatives
+
+**SignalR (Microsoft)**
+```csharp
+// Server
+public class PuzzleHub : Hub
+{
+    public async Task SendMessage(string user, string message)
+    {
+        await Clients.All.SendAsync("ReceiveMessage", user, message);
+    }
+}
+
+// Client
+const connection = new signalR.HubConnectionBuilder()
+    .withUrl("/puzzlehub")
+    .withAutomaticReconnect()
+    .build();
+
+await connection.start();
+```
+
+**Server-Sent Events (SSE)**
+```javascript
+// One-way server-to-client communication
+const evtSource = new EventSource('/api/events');
+
+evtSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    updateUI(data);
+};
+
+evtSource.onerror = (error) => {
+    console.error('SSE error:', error);
+    evtSource.close();
+};
+```
+
+### When Socket.IO is Still Needed
+
+#### 1. Legacy Browser Support
+```javascript
+// Socket.IO handles fallbacks automatically
+const socket = io({
+    transports: ['websocket', 'polling'], // Automatic fallback
+    upgrade: true, // Start with long-polling, upgrade to WebSocket
+});
+
+// Works in older browsers without WebSocket support
+socket.on('connect', () => {
+    console.log('Connected via:', socket.io.engine.transport.name);
+});
+```
+
+#### 2. Complex Room Management
+```javascript
+// Socket.IO's room system is mature and battle-tested
+io.on('connection', (socket) => {
+    // Join a room
+    socket.join(`puzzle:${puzzleId}`);
+    
+    // Broadcast to room except sender
+    socket.to(`puzzle:${puzzleId}`).emit('piece-moved', pieceData);
+    
+    // Leave room
+    socket.leave(`puzzle:${puzzleId}`);
+    
+    // Get all clients in room
+    const clients = await io.in(`puzzle:${puzzleId}`).allSockets();
+});
+```
+
+#### 3. Built-in Reconnection Logic
+```javascript
+// Socket.IO handles reconnection elegantly
+const socket = io({
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.5
+});
+
+socket.on('reconnect', (attemptNumber) => {
+    console.log('Reconnected after', attemptNumber, 'attempts');
+    // Automatically re-subscribes to rooms
+});
+
+socket.on('reconnect_error', (error) => {
+    console.log('Reconnection error:', error);
+});
+```
+
+#### 4. Namespace Support
+```javascript
+// Socket.IO namespaces for multi-tenant apps
+const adminSocket = io('/admin');
+const userSocket = io('/user');
+
+adminSocket.on('system-alert', (data) => {
+    showAdminNotification(data);
+});
+
+userSocket.on('game-update', (data) => {
+    updateGameState(data);
+});
+```
+
+### Socket.IO vs Modern Alternatives
+
+```yaml
+Socket.IO Advantages:
+  - Automatic transport fallback
+  - Built-in room management
+  - Mature reconnection handling
+  - Binary data support
+  - Namespace isolation
+  - Extensive middleware support
+  - Works everywhere
+
+Socket.IO Disadvantages:
+  - Larger bundle size (~85KB)
+  - Not standard WebSocket protocol
+  - Requires Socket.IO on both ends
+  - Performance overhead
+  - Complex handshake process
+  - Session management complexity
+
+Native WebSocket Advantages:
+  - Minimal overhead
+  - Standard protocol
+  - No library required
+  - Better performance
+  - Works with any WebSocket server
+  - Smaller client footprint
+
+Native WebSocket Disadvantages:
+  - No automatic reconnection
+  - No built-in rooms
+  - Manual fallback handling
+  - Basic error handling
+  - No message acknowledgments
+```
+
+### Migration from Socket.IO
+
+#### 1. To Native WebSockets
+```javascript
+// Socket.IO pattern
+socket.emit('chat-message', { text: 'Hello', user: 'Alice' });
+socket.on('chat-message', (data) => {
+    displayMessage(data);
+});
+
+// Native WebSocket equivalent
+class WebSocketClient {
+    constructor(url) {
+        this.ws = new WebSocket(url);
+        this.handlers = new Map();
+        this.reconnectAttempts = 0;
+        this.setupEventHandlers();
+    }
+    
+    setupEventHandlers() {
+        this.ws.onmessage = (event) => {
+            const { type, data } = JSON.parse(event.data);
+            const handler = this.handlers.get(type);
+            if (handler) handler(data);
+        };
+        
+        this.ws.onclose = () => {
+            this.reconnect();
+        };
+    }
+    
+    emit(type, data) {
+        if (this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type, data }));
+        }
+    }
+    
+    on(type, handler) {
+        this.handlers.set(type, handler);
+    }
+    
+    reconnect() {
+        if (this.reconnectAttempts < 5) {
+            setTimeout(() => {
+                this.reconnectAttempts++;
+                this.ws = new WebSocket(this.url);
+                this.setupEventHandlers();
+            }, Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000));
+        }
+    }
+}
+
+// Usage
+const client = new WebSocketClient('wss://api.example.com/ws');
+client.emit('chat-message', { text: 'Hello', user: 'Alice' });
+client.on('chat-message', displayMessage);
+```
+
+#### 2. To SignalR
+```csharp
+// Server migration
+// From Socket.IO pattern
+io.on('connection', (socket) => {
+    socket.on('join-puzzle', (puzzleId) => {
+        socket.join(`puzzle:${puzzleId}`);
+        socket.to(`puzzle:${puzzleId}`).emit('user-joined', socket.id);
+    });
+});
+
+// To SignalR
+public class PuzzleHub : Hub
+{
+    public async Task JoinPuzzle(string puzzleId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"puzzle:{puzzleId}");
+        await Clients.OthersInGroup($"puzzle:{puzzleId}")
+            .SendAsync("UserJoined", Context.ConnectionId);
+    }
+}
+```
+
+### Current Valid Use Cases for Socket.IO
+
+#### 1. Multi-Transport Requirements
+```javascript
+// When you need to support very old browsers or restrictive networks
+const socket = io({
+    transports: ['websocket', 'polling'],
+    // Critical for corporate environments with strict proxies
+    transportOptions: {
+        polling: {
+            extraHeaders: {
+                'X-Custom-Header': 'value'
+            }
+        }
+    }
+});
+```
+
+#### 2. Existing Socket.IO Infrastructure
+```javascript
+// When you have significant investment in Socket.IO
+// - Custom middleware
+// - Room management logic
+// - Authentication systems
+// - Monitoring tools
+
+io.use(customAuthMiddleware);
+io.use(rateLimitMiddleware);
+io.use(loggingMiddleware);
+```
+
+#### 3. Rapid Prototyping
+```javascript
+// Socket.IO is still excellent for quick prototypes
+const io = require('socket.io')(3000);
+
+io.on('connection', (socket) => {
+    console.log('User connected');
+    
+    socket.on('message', (data) => {
+        io.emit('message', data); // Broadcast to all
+    });
+});
+
+// Client - works immediately
+const socket = io('http://localhost:3000');
+socket.emit('message', 'Hello World');
+```
+
+### Modern Real-Time Stack Recommendations
+
+```yaml
+For New .NET Projects:
+  Primary: SignalR with Redis backplane
+  Fallback: ASP.NET Core WebSockets
+  Protocol: MessagePack for efficiency
+  
+For New Node.js Projects:
+  Primary: Native WebSockets with ws library
+  Fallback: Server-Sent Events
+  Protocol: JSON or MessagePack
+  
+For Cross-Platform:
+  Primary: gRPC streaming
+  Fallback: WebSockets
+  Protocol: Protocol Buffers
+
+For Simple Notifications:
+  Primary: Server-Sent Events
+  Fallback: Long polling
+  Protocol: JSON
+
+Legacy Support Required:
+  Primary: Socket.IO 4.x
+  Fallback: Built-in (polling)
+  Protocol: Socket.IO protocol
+```
+
+### Performance Comparison
+
+```javascript
+// Benchmark results (messages/second)
+const benchmarks = {
+    'Native WebSocket': 50000,
+    'Socket.IO': 15000,
+    'SignalR': 40000,
+    'gRPC Streaming': 60000,
+    'Server-Sent Events': 10000
+};
+
+// Latency comparison (milliseconds)
+const latency = {
+    'Native WebSocket': 1,
+    'Socket.IO': 5,
+    'SignalR': 2,
+    'gRPC Streaming': 1,
+    'Server-Sent Events': 3
+};
+```
+
+### Conclusion
+
+Socket.IO is considered legacy because:
+1. **Modern browsers have reliable WebSocket support**
+2. **Better alternatives exist** (SignalR, native WebSockets)
+3. **Performance overhead** is significant
+4. **Non-standard protocol** limits interoperability
+5. **Bundle size** is large for modern web standards
+
+However, Socket.IO remains valuable when:
+1. **Supporting legacy browsers** is required
+2. **Complex room management** is needed out-of-the-box
+3. **Existing Socket.IO infrastructure** is substantial
+4. **Rapid prototyping** is the goal
+5. **Network conditions** are highly variable
+
+For new projects, prefer native WebSockets with a thin abstraction layer or purpose-built solutions like SignalR. Only choose Socket.IO when its specific features justify the overhead.
+
+## Q42: Define Micro-services and what they have replaced. Is microservices always better now?
+
+### Answer:
+
+Microservices are an architectural style where applications are built as a collection of small, autonomous services that communicate through well-defined APIs. Each service is independently deployable, scalable, and owns its data. However, microservices are not always better—they come with significant complexity that must be justified by the problem being solved.
+
+### What Microservices Replaced
+
+#### 1. Monolithic Architecture
+```csharp
+// Traditional Monolith - All in one application
+public class PuzzleApplication
+{
+    // All business logic in one codebase
+    public class UserService { }
+    public class PuzzleService { }
+    public class SessionService { }
+    public class PaymentService { }
+    public class NotificationService { }
+    
+    // Single database
+    public class ApplicationDbContext : DbContext
+    {
+        public DbSet<User> Users { get; set; }
+        public DbSet<Puzzle> Puzzles { get; set; }
+        public DbSet<Session> Sessions { get; set; }
+        public DbSet<Payment> Payments { get; set; }
+    }
+    
+    // Single deployment unit
+    // Single technology stack
+    // Shared memory and resources
+}
+```
+
+#### 2. Service-Oriented Architecture (SOA)
+```xml
+<!-- Traditional SOA with heavyweight protocols -->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+    <soap:Body>
+        <GetPuzzleRequest xmlns="http://puzzleservice.example.com">
+            <PuzzleId>12345</PuzzleId>
+        </GetPuzzleRequest>
+    </soap:Body>
+</soap:Envelope>
+
+<!-- Enterprise Service Bus (ESB) centric -->
+<!-- Shared databases common -->
+<!-- Complex governance -->
+```
+
+### Microservices Architecture
+
+```yaml
+# Microservices approach
+services:
+  user-service:
+    repo: github.com/puzzle/user-service
+    tech: Node.js
+    database: MongoDB
+    team: user-team
+    
+  puzzle-service:
+    repo: github.com/puzzle/puzzle-service
+    tech: .NET Core
+    database: PostgreSQL
+    team: puzzle-team
+    
+  session-service:
+    repo: github.com/puzzle/session-service
+    tech: Go
+    database: Redis + PostgreSQL
+    team: realtime-team
+    
+  payment-service:
+    repo: github.com/puzzle/payment-service
+    tech: Java Spring
+    database: PostgreSQL
+    team: payment-team
+```
+
+### Microservices Characteristics
+
+#### 1. Single Responsibility
+```csharp
+// User Service - Only handles user-related operations
+[ApiController]
+[Route("api/users")]
+public class UserController : ControllerBase
+{
+    private readonly IUserRepository _repository;
+    private readonly IEventBus _eventBus;
+    
+    [HttpPost]
+    public async Task<IActionResult> CreateUser(CreateUserDto dto)
+    {
+        var user = await _repository.CreateAsync(dto);
+        
+        // Publish event for other services
+        await _eventBus.PublishAsync(new UserCreatedEvent
+        {
+            UserId = user.Id,
+            Email = user.Email,
+            CreatedAt = DateTime.UtcNow
+        });
+        
+        return Created($"/api/users/{user.Id}", user);
+    }
+}
+```
+
+#### 2. Independent Deployment
+```yaml
+# Each service has its own CI/CD pipeline
+name: Deploy User Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/user-service/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl set image deployment/user-service \
+            user-service=puzzle/user-service:${{ github.sha }}
+```
+
+#### 3. Decentralized Data Management
+```csharp
+// Each service owns its data
+public class UserService
+{
+    // User service database schema
+    public class UserDbContext : DbContext
+    {
+        public DbSet<User> Users { get; set; }
+        public DbSet<UserProfile> Profiles { get; set; }
+        // No access to Puzzle or Session data
+    }
+}
+
+public class PuzzleService
+{
+    // Puzzle service database schema
+    public class PuzzleDbContext : DbContext
+    {
+        public DbSet<Puzzle> Puzzles { get; set; }
+        public DbSet<PuzzlePiece> Pieces { get; set; }
+        // Stores only user ID, not user data
+    }
+}
+```
+
+### When Microservices are Better
+
+#### 1. Independent Scaling
+```yaml
+# Scale services based on demand
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: session-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: session-service
+  minReplicas: 2
+  maxReplicas: 50  # Session service needs more instances
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+# User service needs less scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-service-hpa
+spec:
+  minReplicas: 1
+  maxReplicas: 5
+```
+
+#### 2. Technology Diversity
+```javascript
+// Real-time service in Node.js for WebSocket performance
+class SessionService {
+    constructor() {
+        this.io = require('socket.io')(3000);
+        this.redis = require('redis').createClient();
+    }
+    
+    handleRealtimeEvents() {
+        this.io.on('connection', (socket) => {
+            // Node.js excels at real-time
+        });
+    }
+}
+```
+
+```python
+# ML service in Python for puzzle generation
+from tensorflow import keras
+import numpy as np
+
+class PuzzleGeneratorService:
+    def __init__(self):
+        self.model = keras.models.load_model('puzzle_difficulty_model.h5')
+    
+    def generate_puzzle(self, image, difficulty):
+        # Python excels at ML/AI tasks
+        features = self.extract_features(image)
+        pieces = self.model.predict(features)
+        return self.create_puzzle_pieces(pieces, difficulty)
+```
+
+#### 3. Team Autonomy
+```yaml
+# Team structure aligned with services
+teams:
+  user-team:
+    services: [user-service, profile-service]
+    members: 5
+    oncall: true
+    deployment-approval: false  # Can deploy anytime
+    
+  puzzle-team:
+    services: [puzzle-service, generator-service]
+    members: 4
+    oncall: true
+    deployment-approval: false
+    
+  platform-team:
+    services: [api-gateway, service-mesh, monitoring]
+    members: 6
+    oncall: true
+    deployment-approval: true  # Critical infrastructure
+```
+
+### When Microservices are NOT Better
+
+#### 1. Distributed System Complexity
+```csharp
+// Handling distributed transactions
+public class CreatePuzzleSessionSaga
+{
+    private readonly IServiceBus _bus;
+    
+    public async Task Handle(CreateSessionCommand command)
+    {
+        // Start saga
+        var sagaId = Guid.NewGuid();
+        
+        try
+        {
+            // Step 1: Reserve puzzle
+            await _bus.Send(new ReservePuzzleCommand 
+            { 
+                SagaId = sagaId,
+                PuzzleId = command.PuzzleId 
+            });
+            
+            // Step 2: Create session
+            await _bus.Send(new CreateSessionCommand 
+            { 
+                SagaId = sagaId,
+                UserId = command.UserId 
+            });
+            
+            // Step 3: Charge user
+            await _bus.Send(new ChargeUserCommand 
+            { 
+                SagaId = sagaId,
+                Amount = command.Price 
+            });
+        }
+        catch
+        {
+            // Compensate - much more complex than monolith transaction
+            await _bus.Send(new CompensateSagaCommand { SagaId = sagaId });
+        }
+    }
+}
+```
+
+#### 2. Performance Overhead
+```yaml
+# Network latency adds up
+Monolith call chain:
+  UserController -> UserService -> Database
+  Total latency: ~5ms
+
+Microservices call chain:
+  API Gateway (2ms) -> 
+  User Service (2ms) -> 
+  Auth Service (2ms) -> 
+  Session Service (2ms) -> 
+  Puzzle Service (2ms)
+  Total latency: ~10ms + network variability
+```
+
+#### 3. Operational Complexity
+```bash
+# Monolith deployment
+./deploy.sh
+
+# Microservices deployment
+kubectl apply -f api-gateway/
+kubectl apply -f user-service/
+kubectl apply -f puzzle-service/
+kubectl apply -f session-service/
+kubectl apply -f payment-service/
+kubectl apply -f notification-service/
+kubectl apply -f service-mesh/
+kubectl apply -f monitoring/
+# ... and 20 more services
+```
+
+### The Monolith-First Approach
+
+```csharp
+// Start with a modular monolith
+namespace PuzzleApp.Modules
+{
+    // Modular structure within monolith
+    public class UserModule : IModule
+    {
+        public void Configure(IServiceCollection services)
+        {
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IUserRepository, UserRepository>();
+        }
+    }
+    
+    public class PuzzleModule : IModule
+    {
+        public void Configure(IServiceCollection services)
+        {
+            services.AddScoped<IPuzzleService, PuzzleService>();
+            services.AddScoped<IPuzzleRepository, PuzzleRepository>();
+        }
+    }
+}
+
+// Easy to extract later if needed
+// Shared database transactions
+// Single deployment
+// Local method calls
+```
+
+### Decision Matrix
+
+```yaml
+Choose Microservices When:
+  Scale Requirements:
+    - Different scaling needs per component
+    - Global distribution required
+    - 100K+ concurrent users
+    
+  Team Structure:
+    - Multiple autonomous teams
+    - Different time zones
+    - 50+ developers
+    
+  Business Requirements:
+    - Different release cycles
+    - Compliance isolation needed
+    - Multi-tenant isolation
+    
+  Technical Requirements:
+    - Polyglot technology needs
+    - Different SLAs per component
+    - Fault isolation critical
+
+Choose Monolith When:
+  Scale Requirements:
+    - Uniform scaling sufficient
+    - Regional deployment
+    - <10K concurrent users
+    
+  Team Structure:
+    - Single co-located team
+    - <10 developers
+    - Shared ownership
+    
+  Business Requirements:
+    - Rapid prototyping
+    - Single release cycle
+    - Startup/MVP phase
+    
+  Technical Requirements:
+    - ACID transactions critical
+    - Sub-millisecond latency
+    - Simple deployment needed
+```
+
+### Hybrid Approaches
+
+#### 1. Modular Monolith
+```csharp
+// Monolith with clear boundaries
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Each module is independent
+        services.AddModule<UserModule>();
+        services.AddModule<PuzzleModule>();
+        services.AddModule<SessionModule>();
+        
+        // But share infrastructure
+        services.AddDbContext<AppDbContext>();
+        services.AddMessageBus();
+    }
+}
+```
+
+#### 2. Macro-services
+```yaml
+# Larger services, fewer of them
+services:
+  core-service:
+    includes: [users, profiles, auth]
+    team: core-team
+    
+  puzzle-service:
+    includes: [puzzles, sessions, gameplay]
+    team: puzzle-team
+    
+  support-service:
+    includes: [payments, notifications, analytics]
+    team: support-team
+```
+
+#### 3. Serverless + Monolith
+```typescript
+// Core monolith with serverless extensions
+// Lambda for image processing
+export const processPuzzleImage = async (event: S3Event) => {
+    const bucket = event.Records[0].s3.bucket.name;
+    const key = event.Records[0].s3.object.key;
+    
+    // Heavy processing in Lambda
+    const processed = await processImage(bucket, key);
+    
+    // Notify monolith
+    await axios.post('https://api.puzzle.com/images/processed', {
+        imageId: key,
+        processedUrl: processed.url
+    });
+};
+```
+
+### Best Practices
+
+```yaml
+If Choosing Microservices:
+  1. Start with a monolith first
+  2. Extract services based on real boundaries
+  3. Invest heavily in:
+     - CI/CD automation
+     - Monitoring and observability
+     - Service mesh
+     - Developer tooling
+  4. Design for failure
+  5. Implement distributed tracing
+  6. Use API gateways
+  7. Standardize communication patterns
+
+If Staying Monolith:
+  1. Keep it modular
+  2. Use clear boundaries
+  3. Prepare for extraction
+  4. Monitor for scaling limits
+  5. Keep deployment simple
+  6. Focus on code quality
+  7. Plan for growth
+```
+
+### Conclusion
+
+Microservices are not always better. They solve specific problems related to scale, team autonomy, and technology diversity, but introduce significant complexity in distributed systems management, data consistency, and operational overhead.
+
+**The key principle**: Don't use microservices because they're trendy. Use them when the benefits (independent scaling, team autonomy, fault isolation) outweigh the costs (complexity, latency, operational overhead).
+
+Most applications should start as a well-structured monolith and evolve to microservices only when the pain of the monolith exceeds the pain of distributed systems. Even then, consider intermediate approaches like modular monoliths or macro-services before going full microservices.
+
+## Q43: How does URI(Configuration["services:mediaservice"]) able to create a valid URI?
+
+### Answer:
+
+The URI constructor in .NET can parse configuration strings into valid URIs through its built-in parsing logic, which handles various URI formats and validates them according to RFC 3986. This pattern is commonly used in microservices architectures to configure service endpoints.
+
+### How It Works
+
+#### 1. Configuration Storage
+```json
+// appsettings.json
+{
+  "Services": {
+    "MediaService": "https://media-api.puzzle.com:8080/v1",
+    "UserService": "http://user-service.internal:5000",
+    "NotificationService": "amqp://rabbitmq:5672",
+    "DatabaseConnection": "postgresql://db-server:5432/puzzledb"
+  }
+}
+```
+
+#### 2. Configuration Retrieval
+```csharp
+public class MediaServiceClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly Uri _baseUri;
+    
+    public MediaServiceClient(IConfiguration configuration, HttpClient httpClient)
+    {
+        // Configuration indexer retrieves the string value
+        var uriString = configuration["Services:MediaService"];
+        // URI constructor parses and validates
+        _baseUri = new Uri(uriString);
+        _httpClient = httpClient;
+        _httpClient.BaseAddress = _baseUri;
+    }
+}
+```
+
+### URI Constructor Parsing
+
+#### 1. Basic Parsing Logic
+```csharp
+// The URI constructor performs these steps:
+public Uri(string uriString)
+{
+    // 1. Trim whitespace
+    // 2. Check for null/empty
+    // 3. Parse scheme (http, https, ftp, etc.)
+    // 4. Parse authority (host:port)
+    // 5. Parse path
+    // 6. Parse query string
+    // 7. Parse fragment
+    // 8. Validate according to RFC 3986
+}
+
+// Examples of valid URIs it can parse:
+var uri1 = new Uri("https://api.example.com");              // Basic HTTPS
+var uri2 = new Uri("http://localhost:5000/api/v1");         // With port and path
+var uri3 = new Uri("https://api.example.com:443/users?active=true#section");  // Full URI
+var uri4 = new Uri("ftp://files.example.com/downloads");    // Different scheme
+var uri5 = new Uri("mongodb://user:pass@localhost:27017/db"); // With credentials
+```
+
+#### 2. URI Components
+```csharp
+var uri = new Uri("https://user:pass@api.example.com:8080/v1/users?active=true#top");
+
+// Parsed components:
+Console.WriteLine($"Scheme: {uri.Scheme}");           // https
+Console.WriteLine($"UserInfo: {uri.UserInfo}");       // user:pass
+Console.WriteLine($"Host: {uri.Host}");               // api.example.com
+Console.WriteLine($"Port: {uri.Port}");               // 8080
+Console.WriteLine($"Path: {uri.AbsolutePath}");       // /v1/users
+Console.WriteLine($"Query: {uri.Query}");             // ?active=true
+Console.WriteLine($"Fragment: {uri.Fragment}");       // #top
+Console.WriteLine($"Authority: {uri.Authority}");     // api.example.com:8080
+```
+
+### Configuration Patterns
+
+#### 1. Environment-Specific URIs
+```json
+// appsettings.Development.json
+{
+  "Services": {
+    "MediaService": "http://localhost:5001"
+  }
+}
+
+// appsettings.Production.json
+{
+  "Services": {
+    "MediaService": "https://media-api.puzzle.com"
+  }
+}
+```
+
+#### 2. Using Options Pattern
+```csharp
+// ServiceEndpoints.cs
+public class ServiceEndpoints
+{
+    public string MediaService { get; set; } = string.Empty;
+    public string UserService { get; set; } = string.Empty;
+    public string NotificationService { get; set; } = string.Empty;
+}
+
+// Startup.cs
+services.Configure<ServiceEndpoints>(configuration.GetSection("Services"));
+
+// Usage
+public class MediaClient
+{
+    private readonly Uri _baseUri;
+    
+    public MediaClient(IOptions<ServiceEndpoints> options)
+    {
+        _baseUri = new Uri(options.Value.MediaService);
+    }
+}
+```
+
+#### 3. Validation and Error Handling
+```csharp
+public class ServiceConfiguration
+{
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<ServiceConfiguration> _logger;
+    
+    public Uri GetServiceUri(string serviceName)
+    {
+        var uriString = _configuration[$"Services:{serviceName}"];
+        
+        if (string.IsNullOrWhiteSpace(uriString))
+        {
+            throw new InvalidOperationException(
+                $"Service URI not configured for '{serviceName}'");
+        }
+        
+        try
+        {
+            var uri = new Uri(uriString);
+            
+            // Additional validation
+            if (!uri.IsAbsoluteUri)
+            {
+                throw new InvalidOperationException(
+                    $"Service URI must be absolute: {uriString}");
+            }
+            
+            if (uri.Scheme != "http" && uri.Scheme != "https")
+            {
+                throw new InvalidOperationException(
+                    $"Service URI must use HTTP or HTTPS: {uriString}");
+            }
+            
+            _logger.LogInformation("Configured {Service} at {Uri}", 
+                serviceName, uri);
+            
+            return uri;
+        }
+        catch (UriFormatException ex)
+        {
+            throw new InvalidOperationException(
+                $"Invalid URI format for service '{serviceName}': {uriString}", ex);
+        }
+    }
+}
+```
+
+### Advanced URI Building
+
+#### 1. Combining Base and Relative URIs
+```csharp
+public class ApiClient
+{
+    private readonly Uri _baseUri;
+    
+    public ApiClient(IConfiguration configuration)
+    {
+        _baseUri = new Uri(configuration["Services:MediaService"]);
+    }
+    
+    public async Task<byte[]> GetImageAsync(string imageId)
+    {
+        // Combine base URI with relative path
+        var imageUri = new Uri(_baseUri, $"images/{imageId}");
+        // Results in: https://media-api.puzzle.com:8080/v1/images/12345
+        
+        using var response = await _httpClient.GetAsync(imageUri);
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+}
+```
+
+#### 2. URI Builder Pattern
+```csharp
+public class ServiceUriBuilder
+{
+    private readonly string _baseUri;
+    
+    public ServiceUriBuilder(IConfiguration configuration)
+    {
+        _baseUri = configuration["Services:MediaService"];
+    }
+    
+    public Uri BuildUri(string path, Dictionary<string, string>? queryParams = null)
+    {
+        var builder = new UriBuilder(_baseUri);
+        
+        // Append path
+        builder.Path = Path.Combine(builder.Path, path);
+        
+        // Add query parameters
+        if (queryParams?.Any() == true)
+        {
+            var query = HttpUtility.ParseQueryString(builder.Query);
+            foreach (var param in queryParams)
+            {
+                query[param.Key] = param.Value;
+            }
+            builder.Query = query.ToString();
+        }
+        
+        return builder.Uri;
+    }
+}
+
+// Usage
+var uri = uriBuilder.BuildUri("images/search", new Dictionary<string, string>
+{
+    ["category"] = "nature",
+    ["size"] = "large"
+});
+// Result: https://media-api.puzzle.com:8080/v1/images/search?category=nature&size=large
+```
+
+### Common Patterns and Issues
+
+#### 1. Service Discovery Integration
+```csharp
+public class DynamicServiceClient
+{
+    private readonly IServiceDiscovery _serviceDiscovery;
+    private readonly IConfiguration _configuration;
+    
+    public async Task<Uri> GetServiceUriAsync(string serviceName)
+    {
+        // Try configuration first
+        var configUri = _configuration[$"Services:{serviceName}"];
+        if (!string.IsNullOrEmpty(configUri))
+        {
+            return new Uri(configUri);
+        }
+        
+        // Fall back to service discovery
+        var endpoint = await _serviceDiscovery.GetServiceEndpointAsync(serviceName);
+        return new Uri($"{endpoint.Scheme}://{endpoint.Host}:{endpoint.Port}");
+    }
+}
+```
+
+#### 2. Health Check URIs
+```csharp
+public class HealthCheckConfiguration
+{
+    public void ConfigureHealthChecks(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddHealthChecks()
+            .AddUrlGroup(
+                uri: new Uri(new Uri(configuration["Services:MediaService"]), "health"),
+                name: "media-service",
+                failureStatus: HealthStatus.Degraded)
+            .AddUrlGroup(
+                uri: new Uri(new Uri(configuration["Services:UserService"]), "health"),
+                name: "user-service",
+                failureStatus: HealthStatus.Degraded);
+    }
+}
+```
+
+#### 3. Environment Variable Override
+```csharp
+public class EnvironmentAwareConfiguration
+{
+    public Uri GetServiceUri(IConfiguration configuration, string serviceName)
+    {
+        // Environment variable takes precedence
+        var envVarName = $"{serviceName.ToUpper()}_SERVICE_URI";
+        var uriString = Environment.GetEnvironmentVariable(envVarName) 
+                       ?? configuration[$"Services:{serviceName}"];
+        
+        if (string.IsNullOrEmpty(uriString))
+        {
+            throw new InvalidOperationException(
+                $"No URI configured for {serviceName}");
+        }
+        
+        return new Uri(uriString);
+    }
+}
+```
+
+### Security Considerations
+
+```csharp
+public class SecureUriConfiguration
+{
+    public Uri GetSecureServiceUri(IConfiguration configuration, string serviceName)
+    {
+        var uri = new Uri(configuration[$"Services:{serviceName}"]);
+        
+        // Ensure HTTPS in production
+        if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Production" 
+            && uri.Scheme != "https")
+        {
+            throw new InvalidOperationException(
+                $"Service {serviceName} must use HTTPS in production");
+        }
+        
+        // Strip credentials from URI for logging
+        if (!string.IsNullOrEmpty(uri.UserInfo))
+        {
+            var builder = new UriBuilder(uri)
+            {
+                UserName = string.Empty,
+                Password = string.Empty
+            };
+            _logger.LogWarning("URI for {Service} contains credentials", serviceName);
+            return builder.Uri;
+        }
+        
+        return uri;
+    }
+}
+```
+
+### Best Practices
+
+```yaml
+URI Configuration Best Practices:
+  1. Validation:
+     - Validate URIs at startup
+     - Ensure required schemes
+     - Check for absolute URIs
+     - Validate in health checks
+     
+  2. Security:
+     - Never log credentials
+     - Use HTTPS in production
+     - Store secrets separately
+     - Validate TLS certificates
+     
+  3. Flexibility:
+     - Support environment overrides
+     - Use service discovery
+     - Implement fallback logic
+     - Support multiple environments
+     
+  4. Error Handling:
+     - Provide clear error messages
+     - Log configuration issues
+     - Fail fast on invalid config
+     - Include troubleshooting info
+```
+
+The URI constructor's ability to parse configuration strings makes it easy to externalize service endpoints, supporting various deployment scenarios from local development to production microservices environments. The key is proper validation and error handling to ensure robust service communication.
